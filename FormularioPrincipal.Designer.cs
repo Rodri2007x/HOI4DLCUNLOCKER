@@ -2,6 +2,7 @@ namespace DlcDeHoi4;
 
 partial class FormularioPrincipal
 {
+    private CheckBox casillaOscuro = null!;
     private TableLayoutPanel panelDeEstado = null!;
     private Button botonReintentar = null!;
     private ListView listaDeDlc = null!;
@@ -11,6 +12,8 @@ partial class FormularioPrincipal
 
     private void InitializeComponent()
     {
+        var barraDeOpciones = new FlowLayoutPanel();
+        casillaOscuro = new CheckBox();
         panelDeEstado = new TableLayoutPanel();
         botonReintentar = new Button();
         listaDeDlc = new ListView();
@@ -18,7 +21,21 @@ partial class FormularioPrincipal
         grupoDeInstalados = new ListViewGroup("instalados", "DLC instalados");
         grupoDeIntegrados = new ListViewGroup("integrados", "Incluidos en el juego base");
         SuspendLayout();
+        barraDeOpciones.SuspendLayout();
         panelDeEstado.SuspendLayout();
+
+        barraDeOpciones.AutoSize = true;
+        barraDeOpciones.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        barraDeOpciones.Dock = DockStyle.Top;
+        barraDeOpciones.FlowDirection = FlowDirection.RightToLeft;
+        barraDeOpciones.Padding = new Padding(10, 6, 10, 6);
+        barraDeOpciones.WrapContents = false;
+
+        casillaOscuro.AutoSize = true;
+        casillaOscuro.Margin = Padding.Empty;
+        casillaOscuro.Text = "Oscuro";
+        casillaOscuro.CheckedChanged += CambiarTema;
+        barraDeOpciones.Controls.Add(casillaOscuro);
 
         panelDeEstado.ColumnCount = 1;
         panelDeEstado.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
@@ -60,10 +77,13 @@ partial class FormularioPrincipal
         ClientSize = new Size(650, 420);
         MinimumSize = new Size(520, 300);
         StartPosition = FormStartPosition.CenterScreen;
-        Text = "DLC de Hearts of Iron IV";
+        Text = "Unlocker";
         Controls.Add(listaDeDlc);
         Controls.Add(panelDeEstado);
+        Controls.Add(barraDeOpciones);
 
+        barraDeOpciones.ResumeLayout(false);
+        barraDeOpciones.PerformLayout();
         panelDeEstado.ResumeLayout(false);
         panelDeEstado.PerformLayout();
         ResumeLayout(false);
