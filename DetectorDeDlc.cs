@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 
 namespace DlcDeHoi4;
 
-internal sealed record DlcDetectado(string Nombre, uint? IdDeSteam, bool EstaIntegrado, string? ImagenLocal);
+internal sealed record DlcDetectado(string Nombre, uint? IdDeSteam, bool EstaIntegrado, string? ImagenLocal, string? Carpeta = null);
 internal sealed record ArchivosDeDlc(string[] Instalados, string[] Integrados, string? ImagenWallpaper);
 
 internal static partial class DetectorDeDlc
@@ -48,7 +48,8 @@ internal static partial class DetectorDeDlc
         IEnumerable<DlcDetectado> instalados = LeerDescriptores(archivos.Instalados, estaIntegrado: false, cancelacion);
         if (archivos.ImagenWallpaper is string imagenWallpaper)
         {
-            instalados = instalados.Append(new DlcDetectado("Wallpaper", 472410, EstaIntegrado: false, imagenWallpaper));
+            instalados = instalados.Append(new DlcDetectado("Wallpaper", 472410, EstaIntegrado: false, imagenWallpaper,
+                Path.GetDirectoryName(imagenWallpaper)));
         }
 
         return instalados
@@ -122,8 +123,9 @@ internal static partial class DetectorDeDlc
             return null;
         }
 
-        string miniatura = Path.Combine(Path.GetDirectoryName(ruta)!, "thumbnail.png");
-        return new DlcDetectado(nombre, idDeSteam, estaIntegrado, File.Exists(miniatura) ? miniatura : null);
+        string carpeta = Path.GetDirectoryName(ruta)!;
+        string miniatura = Path.Combine(carpeta, "thumbnail.png");
+        return new DlcDetectado(nombre, idDeSteam, estaIntegrado, File.Exists(miniatura) ? miniatura : null, carpeta);
     }
 
     [GeneratedRegex("""^\s*(?<clave>name|steam_id)\s*=\s*(?:"(?<valor>(?:\\.|[^"\\])*)"|(?<valor>[^#" \t]+))\s*(?:#.*)?$""",

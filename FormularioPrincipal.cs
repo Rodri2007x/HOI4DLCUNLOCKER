@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 
 namespace DlcDeHoi4;
 
@@ -12,7 +13,10 @@ public partial class FormularioPrincipal : Form
     private const int DescargasSimultaneas = 6;
     private static readonly Icon IconoDeLaAplicacion = new(typeof(FormularioPrincipal), "Recursos.PaqueteYLupa.ico");
     private readonly ImageList imagenesDePortadas = new() { ColorDepth = ColorDepth.Depth32Bit };
+    private readonly ConfiguracionDeInicio configuracion;
     private CancellationTokenSource? deteccionEnCurso;
+    private CancellationTokenSource? portadasEnCurso;
+    private CatalogoDeDlc? catalogo;
 
     private static bool TemaOscuroDisponible =>
         OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000) && !SystemInformation.HighContrast;
@@ -20,10 +24,24 @@ public partial class FormularioPrincipal : Form
     private bool TemaOscuroActivo => casillaOscuro?.Checked == true && TemaOscuroDisponible;
 
     public FormularioPrincipal()
+        : this(new ConfiguracionDeInicio(DetectorDeDlc.CarpetaDelJuego, null))
     {
+    }
+
+    internal FormularioPrincipal(ConfiguracionDeInicio configuracion)
+    {
+        this.configuracion = configuracion;
         InitializeComponent();
         Icon = IconoDeLaAplicacion;
         casillaOscuro.Enabled = TemaOscuroDisponible;
+        if (configuracion.Catalogo is not null)
+        {
+            listaDeDlc.CheckBoxes = true;
+            listaDeDlc.Columns.Add("Estado", 140);
+            listaDeDlc.AccessibleName = "Catálogo de DLC";
+            grupoDeInstalados.Header = "DLC del catálogo";
+            ClientSize = new Size(690, 440);
+        }
     }
 
     protected override void OnHandleCreated(EventArgs argumentos)
@@ -46,6 +64,8 @@ public partial class FormularioPrincipal : Form
         if (disposing)
         {
             deteccionEnCurso?.Cancel();
+            portadasEnCurso?.Cancel();
+            descargaEnCurso?.Cancel();
         }
 
         base.Dispose(disposing);
@@ -84,56 +104,60 @@ public partial class FormularioPrincipal : Form
         await CargarDlcAsync();
     }
 
-    private async Task CargarDlcAsync()
+    private async Task<InstalacionDeHoi4?> CargarDlcAsync()
     {
         if (deteccionEnCurso is not null)
         {
-            return;
+            return null;
         }
 
         using var cancelacion = new CancellationTokenSource();
         deteccionEnCurso = cancelacion;
+        portadasEnCurso?.Cancel();
         botonReintentar.Hide();
         listaDeDlc.Hide();
         panelDeEstado.Show();
+        barraDeDescarga.Hide();
 
         try
         {
-            DirectoryInfo instalacion = await EjecutarEtapaAsync("Verificando instalación…",
-                () => DetectorDeDlc.VerificarInstalacion(DetectorDeDlc.CarpetaDelJuego), cancelacion.Token);
-            ArchivosDeDlc archivos = await EjecutarEtapaAsync("Leyendo DLC…",
-                () => DetectorDeDlc.BuscarArchivos(instalacion, cancelacion.Token), cancelacion.Token);
-            DlcDetectado[] dlcDetectados = await EjecutarEtapaAsync("Leyendo metadatos…",
-                () => DetectorDeDlc.LeerMetadatos(archivos, cancelacion.Token), cancelacion.Token);
+            InstalacionDeHoi4 instalacion = await EjecutarEtapaAsync("Leyendo DLC y metadatos…",
+                () => InstalacionDeHoi4.Leer(configuracion.CarpetaDelJuego, cancelacion.Token), cancelacion.Token);
+            if (catalogo is null && configuracion.Catalogo is Uri direccion)
+            {
+                etiquetaDeEstado.Text = "Cargando catálogo…";
+                catalogo = await CatalogoDeDlc.CargarAsync(direccion, cancelacion.Token);
+            }
+
             if (IsDisposed)
             {
-                return;
+                return null;
             }
 
-            if (dlcDetectados.Length == 0)
+            if (instalacion.Detectados.Length == 0 && catalogo?.Dlcs.Length is not > 0)
             {
                 MostrarMensajeDeReintento("No se encontraron DLC en la carpeta del juego.");
-                return;
+                return null;
             }
 
-            PrepararPortadas();
-            var filas = new List<(DlcDetectado Dlc, ListViewItem Fila)>(dlcDetectados.Length);
             listaDeDlc.Items.Clear();
-            foreach (DlcDetectado dlc in dlcDetectados)
-            {
-                var fila = new ListViewItem(dlc.Nombre)
-                {
-                    Group = dlc.EstaIntegrado ? grupoDeIntegrados : grupoDeInstalados,
-                    ImageIndex = 0,
-                };
-                fila.SubItems.Add(dlc.IdDeSteam?.ToString(CultureInfo.InvariantCulture) ?? "—");
-                listaDeDlc.Items.Add(fila);
-                filas.Add((dlc, fila));
-            }
+            PrepararPortadas();
+            List<(DlcDetectado Dlc, ListViewItem Fila)> filas = MostrarLista(instalacion);
 
             panelDeEstado.Hide();
             listaDeDlc.Show();
-            await CargarPortadasAsync(filas, cancelacion.Token);
+            if (catalogo is not null)
+            {
+                etiquetaDescarga.Text = instalacion.BuildId is null
+                    ? "No se pudo identificar la build de Steam."
+                    : instalacion.Metadatos is null
+                        ? "Revisa 00_dlc_info.txt antes de descargar."
+                        : $"Build de HOI4 {instalacion.BuildId}";
+                barraDeDescarga.Show();
+            }
+
+            _ = ActualizarPortadasAsync(filas);
+            return instalacion;
         }
         catch (DirectoryNotFoundException)
         {
@@ -143,12 +167,39 @@ public partial class FormularioPrincipal : Form
         {
             MostrarMensajeDeReintento("No se pudieron leer los archivos de Hearts of Iron IV.");
         }
+        catch (Exception excepcion) when (excepcion is HttpRequestException or JsonException or InvalidDataException or OperationCanceledException)
+        {
+            if (!cancelacion.IsCancellationRequested)
+            {
+                MostrarMensajeDeReintento($"No se pudo cargar el catálogo. {excepcion.Message}");
+            }
+        }
+        finally
+        {
+            deteccionEnCurso = null;
+            ActualizarBotonDescargar();
+        }
+
+        return null;
+    }
+
+    private async Task ActualizarPortadasAsync(List<(DlcDetectado Dlc, ListViewItem Fila)> filas)
+    {
+        using var cancelacion = new CancellationTokenSource();
+        portadasEnCurso = cancelacion;
+        try
+        {
+            await CargarPortadasAsync(filas, cancelacion.Token);
+        }
         catch (OperationCanceledException) when (cancelacion.IsCancellationRequested)
         {
         }
         finally
         {
-            deteccionEnCurso = null;
+            if (ReferenceEquals(portadasEnCurso, cancelacion))
+            {
+                portadasEnCurso = null;
+            }
         }
     }
 

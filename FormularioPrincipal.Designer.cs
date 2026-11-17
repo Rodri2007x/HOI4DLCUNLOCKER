@@ -9,6 +9,11 @@ partial class FormularioPrincipal
     private Label etiquetaDeEstado = null!;
     private ListViewGroup grupoDeInstalados = null!;
     private ListViewGroup grupoDeIntegrados = null!;
+    private TableLayoutPanel barraDeDescarga = null!;
+    private Button botonDescargar = null!;
+    private Button botonCancelarDescarga = null!;
+    private Label etiquetaDescarga = null!;
+    private ProgressBar progresoDescarga = null!;
 
     private void InitializeComponent()
     {
@@ -20,6 +25,11 @@ partial class FormularioPrincipal
         etiquetaDeEstado = new Label();
         grupoDeInstalados = new ListViewGroup("instalados", "DLC instalados");
         grupoDeIntegrados = new ListViewGroup("integrados", "Incluidos en el juego base");
+        barraDeDescarga = new TableLayoutPanel();
+        botonDescargar = new Button();
+        botonCancelarDescarga = new Button();
+        etiquetaDescarga = new Label();
+        progresoDescarga = new ProgressBar();
         SuspendLayout();
         barraDeOpciones.SuspendLayout();
         panelDeEstado.SuspendLayout();
@@ -71,6 +81,44 @@ partial class FormularioPrincipal
         listaDeDlc.Columns.Add("DLC", 400);
         listaDeDlc.Columns.Add("App ID", 95);
         listaDeDlc.Groups.AddRange([grupoDeInstalados, grupoDeIntegrados]);
+        listaDeDlc.ItemCheck += ComprobarSeleccionDeDescarga;
+        listaDeDlc.ItemChecked += CambiarSeleccionDeDescarga;
+
+        barraDeDescarga.AutoSize = true;
+        barraDeDescarga.Dock = DockStyle.Bottom;
+        barraDeDescarga.Padding = new Padding(8);
+        barraDeDescarga.ColumnCount = 3;
+        barraDeDescarga.RowCount = 2;
+        barraDeDescarga.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        barraDeDescarga.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        barraDeDescarga.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        barraDeDescarga.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        barraDeDescarga.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        barraDeDescarga.Visible = false;
+
+        etiquetaDescarga.AutoEllipsis = true;
+        etiquetaDescarga.Dock = DockStyle.Fill;
+        etiquetaDescarga.TextAlign = ContentAlignment.MiddleLeft;
+        barraDeDescarga.Controls.Add(etiquetaDescarga, 0, 0);
+
+        botonCancelarDescarga.Text = "Cancelar";
+        botonCancelarDescarga.AutoSize = true;
+        botonCancelarDescarga.Visible = false;
+        botonCancelarDescarga.Click += CancelarDescarga;
+        barraDeDescarga.Controls.Add(botonCancelarDescarga, 1, 0);
+
+        botonDescargar.Text = "Descargar";
+        botonDescargar.AutoSize = true;
+        botonDescargar.Enabled = false;
+        botonDescargar.Click += DescargarSeleccionados;
+        barraDeDescarga.Controls.Add(botonDescargar, 2, 0);
+
+        progresoDescarga.AccessibleName = "Progreso de descarga";
+        progresoDescarga.Dock = DockStyle.Fill;
+        progresoDescarga.Height = 12;
+        progresoDescarga.Visible = false;
+        barraDeDescarga.Controls.Add(progresoDescarga, 0, 1);
+        barraDeDescarga.SetColumnSpan(progresoDescarga, 3);
 
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
@@ -81,6 +129,7 @@ partial class FormularioPrincipal
         Text = "Unlocker";
         Controls.Add(listaDeDlc);
         Controls.Add(panelDeEstado);
+        Controls.Add(barraDeDescarga);
         Controls.Add(barraDeOpciones);
 
         barraDeOpciones.ResumeLayout(false);

@@ -6,7 +6,7 @@ internal sealed class ListaDeDlc : ListView
 {
     private const int LvmGetHeader = 0x101F;
     private const int LvmGetGroupRect = 0x1062;
-    private const int LvmGetGroupInfoByIndex = 0x1099;
+    private const int LvmGetGroupInfo = 0x1095;
     private const int WmReflectNotify = 0x204E;
     private const int NmCustomDraw = -12;
     private const int CddsPrePaint = 0x0001;
@@ -14,7 +14,7 @@ internal sealed class ListaDeDlc : ListView
     private const int CdrfNotifyPostPaint = 0x0010;
     private const int LvcdiGroup = 1;
     private const int LvggrLabel = 2;
-    private const int LvgfGroupId = 0x0010;
+    private const int LvgfHeader = 0x0001;
     private bool temaOscuro;
 
     public void AplicarTema(bool oscuro)
@@ -83,7 +83,7 @@ internal sealed class ListaDeDlc : ListView
     {
         var rectangulo = new RECT { top = LvggrLabel };
         if (SendMessage(Handle, LvmGetGroupRect, id, ref rectangulo) == 0 ||
-            BuscarGrupo(id)?.Header is not { Length: > 0 } titulo)
+            ObtenerTituloDeGrupo(id) is not { Length: > 0 } titulo)
         {
             return;
         }
@@ -98,18 +98,32 @@ internal sealed class ListaDeDlc : ListView
             TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis | TextFormatFlags.PreserveGraphicsClipping);
     }
 
-    private ListViewGroup? BuscarGrupo(int id)
+    private string? ObtenerTituloDeGrupo(int id)
     {
-        var grupo = new LVGROUP { cbSize = (uint)Marshal.SizeOf<LVGROUP>(), mask = LvgfGroupId };
-        for (int indice = 0; indice < Groups.Count; indice++)
+        int capacidad = 1;
+        foreach (ListViewGroup grupo in Groups)
         {
-            if (SendMessage(Handle, LvmGetGroupInfoByIndex, indice, ref grupo) != 0 && grupo.iGroupId == id)
-            {
-                return Groups[indice];
-            }
+            capacidad = Math.Max(capacidad, grupo.Header.Length + 1);
         }
 
-        return null;
+        nint memoria = Marshal.AllocHGlobal(capacidad * sizeof(char));
+        try
+        {
+            Marshal.WriteInt16(memoria, 0);
+            Marshal.WriteInt16(memoria, (capacidad - 1) * sizeof(char), 0);
+            var grupo = new LVGROUP
+            {
+                cbSize = (uint)Marshal.SizeOf<LVGROUP>(),
+                mask = LvgfHeader,
+                pszHeader = memoria,
+                cchHeader = capacidad,
+            };
+            return SendMessage(Handle, LvmGetGroupInfo, id, ref grupo) == -1 ? null : Marshal.PtrToStringUni(memoria);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(memoria);
+        }
     }
 
     [StructLayout(LayoutKind.Sequential)]
