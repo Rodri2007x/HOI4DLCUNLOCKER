@@ -3,8 +3,8 @@ using System.Text.RegularExpressions;
 
 namespace DlcDeHoi4;
 
-internal sealed record DlcDetectado(string Nombre, uint? IdDeSteam, bool EstaIntegrado);
-internal sealed record ArchivosDeDlc(string[] Instalados, string[] Integrados, bool IncluyeWallpaper);
+internal sealed record DlcDetectado(string Nombre, uint? IdDeSteam, bool EstaIntegrado, string? ImagenLocal);
+internal sealed record ArchivosDeDlc(string[] Instalados, string[] Integrados, string? ImagenWallpaper);
 
 internal static partial class DetectorDeDlc
 {
@@ -31,18 +31,24 @@ internal static partial class DetectorDeDlc
         // Steam distribuye el pack Wallpaper como archivos PNG.
         string carpetaDeFondos = Path.Combine(carpetaDeDlc, "dlc014_wallpaper");
         cancelacion.ThrowIfCancellationRequested();
-        bool incluyeWallpaper = Directory.Exists(carpetaDeFondos) &&
-            Directory.EnumerateFiles(carpetaDeFondos, "*.png").Any();
+        string? imagenWallpaper = null;
+        if (Directory.Exists(carpetaDeFondos))
+        {
+            string fondoPreferido = Path.Combine(carpetaDeFondos, "PreOrderReward_wallpaper-1280x720.png");
+            imagenWallpaper = File.Exists(fondoPreferido)
+                ? fondoPreferido
+                : Directory.EnumerateFiles(carpetaDeFondos, "*.png").FirstOrDefault();
+        }
 
-        return new ArchivosDeDlc(instalados, integrados, incluyeWallpaper);
+        return new ArchivosDeDlc(instalados, integrados, imagenWallpaper);
     }
 
     public static DlcDetectado[] LeerMetadatos(ArchivosDeDlc archivos, CancellationToken cancelacion)
     {
         IEnumerable<DlcDetectado> instalados = LeerDescriptores(archivos.Instalados, estaIntegrado: false, cancelacion);
-        if (archivos.IncluyeWallpaper)
+        if (archivos.ImagenWallpaper is string imagenWallpaper)
         {
-            instalados = instalados.Append(new DlcDetectado("Wallpaper", 472410, EstaIntegrado: false));
+            instalados = instalados.Append(new DlcDetectado("Wallpaper", 472410, EstaIntegrado: false, imagenWallpaper));
         }
 
         return instalados
@@ -111,7 +117,13 @@ internal static partial class DetectorDeDlc
             }
         }
 
-        return string.IsNullOrWhiteSpace(nombre) ? null : new DlcDetectado(nombre, idDeSteam, estaIntegrado);
+        if (string.IsNullOrWhiteSpace(nombre))
+        {
+            return null;
+        }
+
+        string miniatura = Path.Combine(Path.GetDirectoryName(ruta)!, "thumbnail.png");
+        return new DlcDetectado(nombre, idDeSteam, estaIntegrado, File.Exists(miniatura) ? miniatura : null);
     }
 
     [GeneratedRegex("""^\s*(?<clave>name|steam_id)\s*=\s*(?:"(?<valor>(?:\\.|[^"\\])*)"|(?<valor>[^#" \t]+))\s*(?:#.*)?$""",

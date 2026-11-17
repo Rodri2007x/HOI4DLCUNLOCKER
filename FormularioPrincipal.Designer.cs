@@ -5,7 +5,7 @@ partial class FormularioPrincipal
     private CheckBox casillaOscuro = null!;
     private TableLayoutPanel panelDeEstado = null!;
     private Button botonReintentar = null!;
-    private ListView listaDeDlc = null!;
+    private ListaDeDlc listaDeDlc = null!;
     private Label etiquetaDeEstado = null!;
     private ListViewGroup grupoDeInstalados = null!;
     private ListViewGroup grupoDeIntegrados = null!;
@@ -16,7 +16,7 @@ partial class FormularioPrincipal
         casillaOscuro = new CheckBox();
         panelDeEstado = new TableLayoutPanel();
         botonReintentar = new Button();
-        listaDeDlc = new ListView();
+        listaDeDlc = new ListaDeDlc();
         etiquetaDeEstado = new Label();
         grupoDeInstalados = new ListViewGroup("instalados", "DLC instalados");
         grupoDeIntegrados = new ListViewGroup("integrados", "Incluidos en el juego base");
@@ -66,6 +66,7 @@ partial class FormularioPrincipal
         listaDeDlc.Dock = DockStyle.Fill;
         listaDeDlc.View = View.Details;
         listaDeDlc.FullRowSelect = true;
+        listaDeDlc.HideSelection = false;
         listaDeDlc.Visible = false;
         listaDeDlc.Columns.Add("DLC", 400);
         listaDeDlc.Columns.Add("App ID", 95);

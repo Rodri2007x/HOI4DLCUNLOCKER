@@ -8,7 +8,10 @@ public partial class FormularioPrincipal : Form
     private const int AtributoTemaOscuro = 20;
     private const int AtributoColorDeTitulo = 35;
     private const int AtributoColorDelTextoDeTitulo = 36;
+    private const int ColorDeTituloPredeterminado = -1;
+    private const int DescargasSimultaneas = 6;
     private static readonly Icon IconoDeLaAplicacion = new(typeof(FormularioPrincipal), "Recursos.PaqueteYLupa.ico");
+    private readonly ImageList imagenesDePortadas = new() { ColorDepth = ColorDepth.Depth32Bit };
     private CancellationTokenSource? deteccionEnCurso;
 
     private static bool TemaOscuroDisponible =>
@@ -28,12 +31,7 @@ public partial class FormularioPrincipal : Form
         base.OnHandleCreated(argumentos);
         if (TemaOscuroActivo)
         {
-            const int habilitado = 1;
-            int fondo = ColorTranslator.ToWin32(SystemColors.Window);
-            int texto = ColorTranslator.ToWin32(SystemColors.WindowText);
-            _ = DwmSetWindowAttribute(Handle, AtributoTemaOscuro, habilitado, sizeof(int));
-            _ = DwmSetWindowAttribute(Handle, AtributoColorDeTitulo, fondo, sizeof(int));
-            _ = DwmSetWindowAttribute(Handle, AtributoColorDelTextoDeTitulo, texto, sizeof(int));
+            AplicarTemaDeTitulo(oscuro: true);
         }
     }
 
@@ -43,36 +41,42 @@ public partial class FormularioPrincipal : Form
         await CargarDlcAsync();
     }
 
-    protected override void OnFormClosed(FormClosedEventArgs argumentos)
+    protected override void Dispose(bool disposing)
     {
-        deteccionEnCurso?.Cancel();
-        base.OnFormClosed(argumentos);
+        if (disposing)
+        {
+            deteccionEnCurso?.Cancel();
+        }
+
+        base.Dispose(disposing);
+        if (disposing)
+        {
+            imagenesDePortadas.Dispose();
+        }
     }
 
     private void CambiarTema(object? remitente, EventArgs argumentos)
     {
         Application.SetColorMode(TemaOscuroActivo ? SystemColorMode.Dark : SystemColorMode.Classic);
-        if (IsDisposed)
+        if (IsDisposed || !IsHandleCreated)
         {
             return;
         }
 
-        listaDeDlc.BackColor = Color.FromArgb(SystemColors.Window.ToArgb());
-        listaDeDlc.ForeColor = Color.FromArgb(SystemColors.WindowText.ToArgb());
-        // Al crear sus identificadores nativos, WinForms aplica el tema a los controles.
-        RecreateHandle();
-        BeginInvoke(AplicarTemaDeLista);
-        Refresh();
+        bool oscuro = TemaOscuroActivo;
+        AplicarTemaDeTitulo(oscuro);
+        listaDeDlc.AplicarTema(oscuro);
+        Invalidate(invalidateChildren: true);
     }
 
-    private void AplicarTemaDeLista()
+    private void AplicarTemaDeTitulo(bool oscuro)
     {
-        if (!IsDisposed && listaDeDlc.Visible)
-        {
-            // ItemsView aplica el color oscuro también al texto de los grupos.
-            _ = SetWindowTheme(listaDeDlc.Handle, TemaOscuroActivo ? "DarkMode_ItemsView" : null, null);
-            listaDeDlc.Refresh();
-        }
+        int habilitado = oscuro ? 1 : 0;
+        int fondo = oscuro ? ColorTranslator.ToWin32(SystemColors.Window) : ColorDeTituloPredeterminado;
+        int texto = oscuro ? ColorTranslator.ToWin32(SystemColors.WindowText) : ColorDeTituloPredeterminado;
+        _ = DwmSetWindowAttribute(Handle, AtributoTemaOscuro, habilitado, sizeof(int));
+        _ = DwmSetWindowAttribute(Handle, AtributoColorDeTitulo, fondo, sizeof(int));
+        _ = DwmSetWindowAttribute(Handle, AtributoColorDelTextoDeTitulo, texto, sizeof(int));
     }
 
     private async void ReintentarDeteccion(object? remitente, EventArgs argumentos)
@@ -112,23 +116,24 @@ public partial class FormularioPrincipal : Form
                 return;
             }
 
+            PrepararPortadas();
+            var filas = new List<(DlcDetectado Dlc, ListViewItem Fila)>(dlcDetectados.Length);
             listaDeDlc.Items.Clear();
             foreach (DlcDetectado dlc in dlcDetectados)
             {
                 var fila = new ListViewItem(dlc.Nombre)
                 {
                     Group = dlc.EstaIntegrado ? grupoDeIntegrados : grupoDeInstalados,
+                    ImageIndex = 0,
                 };
                 fila.SubItems.Add(dlc.IdDeSteam?.ToString(CultureInfo.InvariantCulture) ?? "—");
                 listaDeDlc.Items.Add(fila);
+                filas.Add((dlc, fila));
             }
 
             panelDeEstado.Hide();
             listaDeDlc.Show();
-            if (TemaOscuroActivo)
-            {
-                BeginInvoke(AplicarTemaDeLista);
-            }
+            await CargarPortadasAsync(filas, cancelacion.Token);
         }
         catch (DirectoryNotFoundException)
         {
@@ -144,6 +149,91 @@ public partial class FormularioPrincipal : Form
         finally
         {
             deteccionEnCurso = null;
+        }
+    }
+
+    private void PrepararPortadas()
+    {
+        int ancho = Math.Min(LogicalToDeviceUnits(96), 256);
+        int alto = ancho / 2;
+        imagenesDePortadas.Images.Clear();
+        imagenesDePortadas.ImageSize = new Size(ancho, alto);
+        _ = imagenesDePortadas.Handle;
+
+        using var sinPortada = new Bitmap(ancho, alto);
+        using (var graficos = Graphics.FromImage(sinPortada))
+        {
+            int margen = Math.Max(2, alto / 24);
+            using var fondo = new SolidBrush(Color.FromArgb(36, Color.Gray));
+            using var marca = new SolidBrush(Color.FromArgb(180, Color.Gray));
+            graficos.FillRectangle(fondo, margen, margen, ancho - 2 * margen, alto - 2 * margen);
+            graficos.FillRectangle(marca, ancho / 2 - 4 * margen, alto / 2 - margen / 2, 8 * margen, margen);
+        }
+
+        imagenesDePortadas.Images.Add(sinPortada);
+        listaDeDlc.SmallImageList = imagenesDePortadas;
+    }
+
+    private async Task CargarPortadasAsync(
+        List<(DlcDetectado Dlc, ListViewItem Fila)> filas, CancellationToken cancelacion)
+    {
+        Size tamano = imagenesDePortadas.ImageSize;
+        var pendientesDeTienda = new Dictionary<uint, ListViewItem[]>();
+        foreach (var grupo in filas.GroupBy(entrada => entrada.Dlc.IdDeSteam))
+        {
+            cancelacion.ThrowIfCancellationRequested();
+            if (grupo.Key is uint id)
+            {
+                ListViewItem[] filasDelDlc = grupo.Select(entrada => entrada.Fila).ToArray();
+                using Bitmap? guardada = await PortadasDeSteam.LeerCacheAsync(id, tamano, cancelacion);
+                if (guardada is not null)
+                {
+                    MostrarPortada(guardada, filasDelDlc, cancelacion);
+                    continue;
+                }
+
+                pendientesDeTienda.Add(id, filasDelDlc);
+            }
+
+            foreach ((DlcDetectado dlc, ListViewItem fila) in grupo)
+            {
+                if (dlc.ImagenLocal is string ruta)
+                {
+                    using Bitmap? miniatura = await PortadasDeSteam.LeerImagenLocalAsync(ruta, tamano, cancelacion);
+                    MostrarPortada(miniatura, [fila], cancelacion);
+                }
+            }
+        }
+
+        using var limite = new SemaphoreSlim(DescargasSimultaneas);
+        await Task.WhenAll(pendientesDeTienda.Select(async entrada =>
+        {
+            await limite.WaitAsync(cancelacion);
+            try
+            {
+                using Bitmap? portada = await PortadasDeSteam.DescargarAsync(entrada.Key, tamano, cancelacion);
+                MostrarPortada(portada, entrada.Value, cancelacion);
+            }
+            finally
+            {
+                limite.Release();
+            }
+        }));
+    }
+
+    private void MostrarPortada(Bitmap? portada, ListViewItem[] filas, CancellationToken cancelacion)
+    {
+        cancelacion.ThrowIfCancellationRequested();
+        if (portada is null || IsDisposed)
+        {
+            return;
+        }
+
+        int indice = imagenesDePortadas.Images.Count;
+        imagenesDePortadas.Images.Add(portada);
+        foreach (ListViewItem fila in filas)
+        {
+            fila.ImageIndex = indice;
         }
     }
 
@@ -167,7 +257,4 @@ public partial class FormularioPrincipal : Form
 
     [DllImport("dwmapi.dll", ExactSpelling = true)]
     private static extern int DwmSetWindowAttribute(nint ventana, int atributo, in int valor, int tamano);
-
-    [DllImport("uxtheme.dll", ExactSpelling = true, CharSet = CharSet.Unicode)]
-    private static extern int SetWindowTheme(nint ventana, string? tema, string? listaDeClases);
 }
