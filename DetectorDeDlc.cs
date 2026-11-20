@@ -4,11 +4,22 @@ using System.Text.RegularExpressions;
 namespace DlcDeHoi4;
 
 internal sealed record DlcDetectado(string Nombre, uint? IdDeSteam, bool EstaIntegrado, string? ImagenLocal, string? Carpeta = null);
-internal sealed record ArchivosDeDlc(string[] Instalados, string[] Integrados, string? ImagenWallpaper);
+internal sealed record ArchivosDeDlc(string[] Instalados, string[] Integrados, DlcDetectado[] Extras);
 
 internal static partial class DetectorDeDlc
 {
     public const string CarpetaDelJuego = @"C:\Program Files (x86)\Steam\steamapps\common\Hearts of Iron IV";
+
+    private static readonly (uint Id, string Nombre, string Carpeta, string Subcarpeta, string Patron, string? Imagen)[] Extras =
+    [
+        (472410, "Wallpaper", "dlc014_wallpaper", "", "*.png", "PreOrderReward_wallpaper-1280x720.png"),
+        (472411, "Unique Wallpaper", "dlc015_unique_wallpaper", "", "Signed-SignupReward_wallpaper-*.png",
+            "Signed-SignupReward_wallpaper-1920x1080.png"),
+        (473130, "Artbook", "dlc016_artbook", "", "Hearts of Iron IV - Art of War.pdf", null),
+        (486950, "Original Soundtrack", "dlc017_original_soundtrack", "MP3", "*.mp3", null),
+        (1032150, "Man the Guns Wallpaper", "dlc024_man_the_guns_wallpaper", "", "WhatDamageWecan-*.png",
+            "WhatDamageWecan-1920x1080.png"),
+    ];
 
     public static DirectoryInfo VerificarInstalacion(string carpetaDelJuego)
     {
@@ -28,35 +39,47 @@ internal static partial class DetectorDeDlc
         string[] instalados = BuscarDescriptores(carpetaDeDlc, cancelacion).ToArray();
         string[] integrados = BuscarDescriptores(carpetaDeIntegrados, cancelacion).ToArray();
 
-        // Steam distribuye el pack Wallpaper como archivos PNG.
-        string carpetaDeFondos = Path.Combine(carpetaDeDlc, "dlc014_wallpaper");
-        cancelacion.ThrowIfCancellationRequested();
-        string? imagenWallpaper = null;
-        if (Directory.Exists(carpetaDeFondos))
-        {
-            string fondoPreferido = Path.Combine(carpetaDeFondos, "PreOrderReward_wallpaper-1280x720.png");
-            imagenWallpaper = File.Exists(fondoPreferido)
-                ? fondoPreferido
-                : Directory.EnumerateFiles(carpetaDeFondos, "*.png").FirstOrDefault();
-        }
-
-        return new ArchivosDeDlc(instalados, integrados, imagenWallpaper);
+        return new ArchivosDeDlc(instalados, integrados, BuscarExtras(carpetaDeDlc, cancelacion).ToArray());
     }
 
     public static DlcDetectado[] LeerMetadatos(ArchivosDeDlc archivos, CancellationToken cancelacion)
     {
         IEnumerable<DlcDetectado> instalados = LeerDescriptores(archivos.Instalados, estaIntegrado: false, cancelacion);
-        if (archivos.ImagenWallpaper is string imagenWallpaper)
-        {
-            instalados = instalados.Append(new DlcDetectado("Wallpaper", 472410, EstaIntegrado: false, imagenWallpaper,
-                Path.GetDirectoryName(imagenWallpaper)));
-        }
-
         return instalados
+            .Concat(archivos.Extras)
             .Concat(LeerDescriptores(archivos.Integrados, estaIntegrado: true, cancelacion))
             .DistinctBy(dlc => (dlc.IdDeSteam, dlc.Nombre))
             .OrderBy(dlc => dlc.Nombre, StringComparer.CurrentCultureIgnoreCase)
             .ToArray();
+    }
+
+    private static IEnumerable<DlcDetectado> BuscarExtras(string carpetaDeDlc, CancellationToken cancelacion)
+    {
+        var opciones = new EnumerationOptions
+        {
+            AttributesToSkip = FileAttributes.ReparsePoint,
+            IgnoreInaccessible = false,
+        };
+        foreach (var (id, nombre, carpeta, subcarpeta, patron, imagenPreferida) in Extras)
+        {
+            cancelacion.ThrowIfCancellationRequested();
+            string ruta = Path.Combine(carpetaDeDlc, carpeta);
+            string contenido = Path.Combine(ruta, subcarpeta);
+            if (!Directory.Exists(contenido) || (File.GetAttributes(ruta) & FileAttributes.ReparsePoint) != 0 ||
+                (File.GetAttributes(contenido) & FileAttributes.ReparsePoint) != 0)
+            {
+                continue;
+            }
+
+            string[] archivos = Directory.GetFiles(contenido, patron, opciones);
+            if (archivos.Length > 0)
+            {
+                string? imagen = imagenPreferida is null ? null :
+                    archivos.FirstOrDefault(archivo => Path.GetFileName(archivo).Equals(imagenPreferida, StringComparison.OrdinalIgnoreCase))
+                    ?? archivos[0];
+                yield return new DlcDetectado(nombre, id, EstaIntegrado: false, imagen, ruta);
+            }
+        }
     }
 
     private static IEnumerable<string> BuscarDescriptores(string carpeta, CancellationToken cancelacion)

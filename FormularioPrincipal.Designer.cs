@@ -79,7 +79,7 @@ partial class FormularioPrincipal
         listaDeDlc.HideSelection = false;
         listaDeDlc.Visible = false;
         listaDeDlc.Columns.Add("DLC", 400);
-        listaDeDlc.Columns.Add("App ID", 95);
+        listaDeDlc.Columns.Add("ID de Steam", 95);
         listaDeDlc.Groups.AddRange([grupoDeInstalados, grupoDeIntegrados]);
         listaDeDlc.ItemCheck += ComprobarSeleccionDeDescarga;
         listaDeDlc.ItemChecked += CambiarSeleccionDeDescarga;

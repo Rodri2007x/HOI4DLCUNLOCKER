@@ -116,7 +116,13 @@ internal sealed class MetadatosDeDlc
             {
                 if (local.AppId is uint id && id != aprobada.AppId)
                 {
-                    throw new InvalidDataException($"La clave {aprobada.Clave} ya pertenece a otro DLC.");
+                    // Algunas instalaciones tienen el App ID de Heavy Cruisers en el bloque de Soviet Tanks.
+                    bool corregirSovietTanks = aprobada.Clave == "dlc006" && id == 460553 && aprobada.AppId == 460554 &&
+                        !entradas.Values.Any(entrada => entrada.AppId == aprobada.AppId);
+                    if (!corregirSovietTanks)
+                    {
+                        throw new InvalidDataException($"La clave {aprobada.Clave} ya pertenece a otro DLC.");
+                    }
                 }
 
                 reemplazos.Add((local, bloque));
