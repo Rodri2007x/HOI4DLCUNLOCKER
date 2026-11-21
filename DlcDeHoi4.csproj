@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationIcon>Recursos\PaqueteYLupa.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Recursos\PaqueteYLupa.ico" />
+    <None Remove="Recursos\CreamAPI\steam_api.dll" />
+    <None Remove="Recursos\CreamAPI\steam_api64.dll" />
+    <EmbeddedResource Include="Recursos\CreamAPI\steam_api.dll" />
+    <EmbeddedResource Include="Recursos\CreamAPI\steam_api64.dll" />
+  </ItemGroup>
+
+</Project>
