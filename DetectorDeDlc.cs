@@ -8,8 +8,6 @@ internal sealed record ArchivosDeDlc(string[] Instalados, string[] Integrados, D
 
 internal static partial class DetectorDeDlc
 {
-    public const string CarpetaDelJuego = @"C:\Program Files (x86)\Steam\steamapps\common\Hearts of Iron IV";
-
     private static readonly (uint Id, string Nombre, string Carpeta, string Subcarpeta, string Patron, string? Imagen)[] Extras =
     [
         (472410, "Wallpaper", "dlc014_wallpaper", "", "*.png", "PreOrderReward_wallpaper-1280x720.png"),

@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text;
 
 namespace DlcDeHoi4;
 
@@ -162,7 +161,8 @@ public partial class FormularioPrincipal
 
     private async void DescargarSeleccionados(object? remitente, EventArgs argumentos)
     {
-        if (catalogo is null || descargaEnCurso is not null || deteccionEnCurso is not null)
+        if (catalogo is not CatalogoDeDlc catalogoActivo || instalacionMostrada is not InstalacionDeHoi4 instalacion ||
+            descargaEnCurso is not null || deteccionEnCurso is not null)
         {
             return;
         }
@@ -173,50 +173,28 @@ public partial class FormularioPrincipal
             return;
         }
 
+        string confirmacion = $"¿Confirmas la descarga e instalación de {fichas.Length} DLC en esta carpeta?\n\n" +
+            $"{instalacion.Carpeta}\n\nLa instalación completada es irreversible desde la app.";
+        if (MessageBox.Show(this, confirmacion, "Confirmar descarga e instalación",
+                MessageBoxButtons.OKCancel, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.OK)
+        {
+            return;
+        }
+
         bool incluirSoundtracks = casillaSoundtracks.Checked;
+        uint[] ids = fichas.Select(ficha => ficha.AppId).ToArray();
         using var cancelacion = new CancellationTokenSource();
         descargaEnCurso = cancelacion;
         ActualizarControlesDeDescarga();
-        botonCancelarDescarga.Show();
-        progresoDescarga.Value = 0;
-        progresoDescarga.Show();
-        etiquetaDescarga.Text = "Preparando descarga…";
-
-        var progreso = new Progress<ProgresoDeDescarga>(actual =>
-        {
-            if (!IsDisposed && ReferenceEquals(descargaEnCurso, cancelacion))
-            {
-                etiquetaDescarga.Text = actual.Mensaje;
-                progresoDescarga.Value = (int)Math.Clamp(actual.Descargados * 100.0 / actual.Total, 0, 100);
-            }
-        });
 
         try
         {
-            uint[] ids = fichas.Select(ficha => ficha.AppId).ToArray();
-            await Task.Run(() => InstaladorDeDlc.InstalarAsync(configuracion.CarpetaDelJuego, catalogo, ids,
-                progreso, cancelacion.Token, incluirSoundtracks), cancelacion.Token);
-            if (!IsDisposed && !cerrarTrasDescarga && await CargarDlcAsync() is InstalacionDeHoi4 estado)
+            using var dialogo = new FormularioDeInstalacion(cancelacion, (progreso, token) =>
+                InstaladorDeDlc.InstalarAsync(instalacion.Carpeta, catalogoActivo, ids, progreso, token, incluirSoundtracks));
+            dialogo.ShowDialog(this);
+            if (dialogo.InstalacionCompletada && !IsDisposed && !cerrarTrasDescarga)
             {
-                etiquetaDescarga.Text = fichas.All(ficha => estado.EstaInstalado(ficha, incluirSoundtracks))
-                    ? "Instalación completada."
-                    : "Revisa el estado de los DLC seleccionados.";
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            if (!IsDisposed)
-            {
-                etiquetaDescarga.Text = cancelacion.IsCancellationRequested ? "Descarga cancelada." : "La descarga tardó demasiado.";
-            }
-        }
-        catch (Exception error) when (error is HttpRequestException or IOException or InvalidDataException or
-            UnauthorizedAccessException or DecoderFallbackException or OverflowException)
-        {
-            if (!IsDisposed && !cerrarTrasDescarga)
-            {
-                etiquetaDescarga.Text = "No se pudo completar la instalación.";
-                MessageBox.Show(this, error.Message, "Descarga de DLC", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                await CargarDlcAsync();
             }
         }
         finally
@@ -224,8 +202,6 @@ public partial class FormularioPrincipal
             descargaEnCurso = null;
             if (!IsDisposed)
             {
-                botonCancelarDescarga.Hide();
-                progresoDescarga.Hide();
                 ActualizarControlesDeDescarga();
                 if (cerrarTrasDescarga)
                 {
@@ -234,8 +210,6 @@ public partial class FormularioPrincipal
             }
         }
     }
-
-    private void CancelarDescarga(object? remitente, EventArgs argumentos) => descargaEnCurso?.Cancel();
 
     protected override void OnFormClosing(FormClosingEventArgs argumentos)
     {

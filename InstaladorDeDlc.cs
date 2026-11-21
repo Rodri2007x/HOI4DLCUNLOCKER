@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.IO.Compression;
 using System.Security.Cryptography;
@@ -5,14 +6,17 @@ using System.Text;
 
 namespace DlcDeHoi4;
 
-internal sealed record ProgresoDeDescarga(string Mensaje, long Descargados, long Total);
+internal sealed record ProgresoDeDescarga(string Mensaje, int Porcentaje, string? Archivo = null, bool Aplicando = false);
 
 internal static class InstaladorDeDlc
 {
+    private const int FinDeLaDescarga = 90;
+
     public static async Task InstalarAsync(string carpeta, CatalogoDeDlc catalogo, uint[] ids,
         IProgress<ProgresoDeDescarga>? progreso, CancellationToken cancelacion, bool incluirSoundtracks = false)
     {
         cancelacion.ThrowIfCancellationRequested();
+        progreso?.Report(new ProgresoDeDescarga("Comprobando la instalación de HOI4…", 0));
         string raiz = DetectorDeDlc.VerificarInstalacion(carpeta).FullName;
         string destinoDlc = Path.Combine(raiz, "dlc");
         string rutaMetadatos = InstalacionDeHoi4.RutaDeMetadatos(raiz);
@@ -83,8 +87,9 @@ internal static class InstaladorDeDlc
                     await DescargarAsync(catalogo.DireccionDelPaquete(paquete), archivo, ficha.Nombre, paquete.Bytes, paquete.Sha256,
                         anteriores, total, progreso, cancelacion).ConfigureAwait(false);
                     anteriores += paquete.Bytes;
-                    progreso?.Report(new ProgresoDeDescarga($"Verificando {ficha.Nombre}…", anteriores, total));
-                    preparados.Add(await PrepararDlcAsync(archivo, zona, destinoDlc, ficha, paquete, cancelacion).ConfigureAwait(false));
+                    Action<string>? informarArchivo = InformarExtraccion(progreso, ficha.Nombre, PorcentajeDescargado(anteriores, total));
+                    preparados.Add(await PrepararDlcAsync(archivo, zona, destinoDlc, ficha, paquete, informarArchivo, cancelacion)
+                        .ConfigureAwait(false));
                 }
 
                 if (soundtrack is not null)
@@ -94,9 +99,10 @@ internal static class InstaladorDeDlc
                     await DescargarAsync(catalogo.DireccionDelSoundtrack(soundtrack), archivo, nombre, soundtrack.Bytes, soundtrack.Sha256,
                         anteriores, total, progreso, cancelacion).ConfigureAwait(false);
                     anteriores += soundtrack.Bytes;
-                    progreso?.Report(new ProgresoDeDescarga($"Verificando {nombre}…", anteriores, total));
                     string carpetaPreparada = Path.Combine(zona, "soundtrack");
-                    await ExtraerSoundtrackAsync(archivo, carpetaPreparada, soundtrack.Pistas, cancelacion).ConfigureAwait(false);
+                    Action<string>? informarArchivo = InformarExtraccion(progreso, nombre, PorcentajeDescargado(anteriores, total));
+                    await ExtraerSoundtrackAsync(archivo, carpetaPreparada, soundtrack.Pistas, informarArchivo, cancelacion)
+                        .ConfigureAwait(false);
                     soundtracksPreparados.Add(new SoundtrackPreparado(carpetaPreparada,
                         InstalacionDeHoi4.RutaDeSoundtrack(raiz, paquete.Carpeta), soundtrack.Pistas));
                 }
@@ -130,8 +136,9 @@ internal static class InstaladorDeDlc
             }
             cancelacion.ThrowIfCancellationRequested();
 
-            progreso?.Report(new ProgresoDeDescarga("Instalando el contenido seleccionado…", total, total));
-            Aplicar(raiz, preparados, soundtracksPreparados, rutaMetadatos, candidato, temporal, actuales, ref conservarRespaldo);
+            progreso?.Report(new ProgresoDeDescarga("Instalando el contenido seleccionado…", FinDeLaDescarga, Aplicando: true));
+            Aplicar(raiz, preparados, soundtracksPreparados, rutaMetadatos, candidato, temporal, actuales, progreso, ref conservarRespaldo);
+            progreso?.Report(new ProgresoDeDescarga("Finalizando la instalación…", 99, Aplicando: true));
         }
         finally
         {
@@ -150,9 +157,9 @@ internal static class InstaladorDeDlc
     }
 
     private static async Task<DlcPreparado> PrepararDlcAsync(string archivo, string zona, string destino, FichaDeDlc ficha,
-        PaqueteDeDlc paquete, CancellationToken cancelacion)
+        PaqueteDeDlc paquete, Action<string>? informarArchivo, CancellationToken cancelacion)
     {
-        await ExtraerAsync(archivo, zona, paquete.Carpeta, cancelacion).ConfigureAwait(false);
+        await ExtraerAsync(archivo, zona, paquete.Carpeta, informarArchivo, cancelacion).ConfigureAwait(false);
         string carpetaPreparada = Path.Combine(zona, "dlc", paquete.Carpeta);
         ArchivosDeDlc archivos = DetectorDeDlc.BuscarArchivos(new DirectoryInfo(zona), cancelacion);
         DlcDetectado[] detectados = DetectorDeDlc.LeerMetadatos(archivos, cancelacion);
@@ -173,11 +180,36 @@ internal static class InstaladorDeDlc
         return new DlcPreparado(carpetaPreparada, Path.Combine(destino, paquete.Carpeta), entrada);
     }
 
+    private static int PorcentajeDescargado(long descargados, long total) => (int)(FinDeLaDescarga * (double)descargados / total);
+
+    private static Action<string>? InformarExtraccion(IProgress<ProgresoDeDescarga>? progreso, string nombre, int porcentaje)
+    {
+        if (progreso is null)
+        {
+            return null;
+        }
+
+        string mensaje = $"Extrayendo {nombre}…";
+        progreso.Report(new ProgresoDeDescarga(mensaje, porcentaje));
+        long ultimoAviso = 0;
+        return archivo =>
+        {
+            long ahora = Stopwatch.GetTimestamp();
+            if (ultimoAviso == 0 || Stopwatch.GetElapsedTime(ultimoAviso, ahora).TotalMilliseconds >= 100)
+            {
+                progreso.Report(new ProgresoDeDescarga(mensaje, porcentaje, archivo));
+                ultimoAviso = ahora;
+            }
+        };
+    }
+
     private static async Task DescargarAsync(Uri direccion, string archivo, string nombre, long bytes, string sha256, long anteriores, long total,
         IProgress<ProgresoDeDescarga>? progreso, CancellationToken cancelacion)
     {
         string mensaje = $"Descargando {nombre}…";
-        progreso?.Report(new ProgresoDeDescarga(mensaje, anteriores, total));
+        string nombreZip = Uri.UnescapeDataString(direccion.Segments[^1]);
+        int porcentajeAvisado = PorcentajeDescargado(anteriores, total);
+        progreso?.Report(new ProgresoDeDescarga(mensaje, porcentajeAvisado, nombreZip));
         using HttpResponseMessage respuesta = await CatalogoDeDlc.Cliente.GetAsync(
             direccion, HttpCompletionOption.ResponseHeadersRead, cancelacion).ConfigureAwait(false);
         respuesta.EnsureSuccessStatusCode();
@@ -191,7 +223,6 @@ internal static class InstaladorDeDlc
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         var buffer = new byte[65536];
         long recibidos = 0;
-        long ultimoAviso = 0;
         int lectura;
         while ((lectura = await origen.ReadAsync(buffer.AsMemory(), cancelacion).ConfigureAwait(false)) > 0)
         {
@@ -203,13 +234,15 @@ internal static class InstaladorDeDlc
             hash.AppendData(buffer, 0, lectura);
             await destino.WriteAsync(buffer.AsMemory(0, lectura), cancelacion).ConfigureAwait(false);
             recibidos += lectura;
-            if (recibidos - ultimoAviso >= 1024 * 1024)
+            int porcentaje = PorcentajeDescargado(anteriores + recibidos, total);
+            if (porcentaje != porcentajeAvisado)
             {
-                progreso?.Report(new ProgresoDeDescarga(mensaje, anteriores + recibidos, total));
-                ultimoAviso = recibidos;
+                progreso?.Report(new ProgresoDeDescarga(mensaje, porcentaje, nombreZip));
+                porcentajeAvisado = porcentaje;
             }
         }
 
+        progreso?.Report(new ProgresoDeDescarga($"Verificando {nombre}…", porcentajeAvisado, nombreZip));
         if (recibidos != bytes ||
             !string.Equals(Convert.ToHexString(hash.GetHashAndReset()), sha256, StringComparison.OrdinalIgnoreCase))
         {
@@ -217,7 +250,8 @@ internal static class InstaladorDeDlc
         }
     }
 
-    private static async Task ExtraerAsync(string archivo, string zona, string carpeta, CancellationToken cancelacion)
+    private static async Task ExtraerAsync(string archivo, string zona, string carpeta, Action<string>? informarArchivo,
+        CancellationToken cancelacion)
     {
         using ZipArchive zip = ZipFile.OpenRead(archivo);
         string prefijo = $"dlc/{carpeta}/";
@@ -243,11 +277,13 @@ internal static class InstaladorDeDlc
                 continue;
             }
 
+            informarArchivo?.Invoke(ruta);
             await ExtraerArchivoAsync(entrada, destino, cancelacion).ConfigureAwait(false);
         }
     }
 
-    private static async Task ExtraerSoundtrackAsync(string archivo, string carpeta, string[] pistas, CancellationToken cancelacion)
+    private static async Task ExtraerSoundtrackAsync(string archivo, string carpeta, string[] pistas, Action<string>? informarArchivo,
+        CancellationToken cancelacion)
     {
         var pendientes = new HashSet<string>(pistas, StringComparer.OrdinalIgnoreCase);
         using ZipArchive zip = ZipFile.OpenRead(archivo);
@@ -259,6 +295,7 @@ internal static class InstaladorDeDlc
                 throw new InvalidDataException("El ZIP del soundtrack contiene una pista inválida o inesperada.");
             }
 
+            informarArchivo?.Invoke(entrada.FullName);
             await ExtraerArchivoAsync(entrada, Path.Combine(carpeta, entrada.FullName), cancelacion).ConfigureAwait(false);
         }
 
@@ -285,17 +322,21 @@ internal static class InstaladorDeDlc
     }
 
     private static void Aplicar(string raiz, IReadOnlyList<DlcPreparado> preparados, IReadOnlyList<SoundtrackPreparado> soundtracks,
-        string rutaMetadatos, string? candidato, string temporal, MetadatosDeDlc actuales, ref bool conservarRespaldo)
+        string rutaMetadatos, string? candidato, string temporal, MetadatosDeDlc actuales, IProgress<ProgresoDeDescarga>? progreso,
+        ref bool conservarRespaldo)
     {
         string respaldoMetadatos = Path.Combine(temporal, "respaldo-metadatos.txt");
         var movimientos = new List<Movimiento>();
         var pistasInstaladas = new List<string>();
         var carpetasDeSoundtrack = new List<string>();
+        int operaciones = preparados.Count + soundtracks.Sum(soundtrack => soundtrack.Pistas.Length) + (candidato is null ? 0 : 1);
+        int realizadas = 0;
         try
         {
             VerificarMetadatos(rutaMetadatos, actuales);
             foreach (DlcPreparado preparado in preparados)
             {
+                InformarAplicacion("Instalando DLC…", preparado.Destino);
                 ValidarDestino(raiz, preparado.Destino, preparado.Entrada.AppId, CancellationToken.None);
                 Directory.CreateDirectory(Path.GetDirectoryName(preparado.Destino)!);
                 var movimiento = new Movimiento(preparado, Path.Combine(temporal, $"respaldo-{movimientos.Count}"));
@@ -318,6 +359,7 @@ internal static class InstaladorDeDlc
                 foreach (string pista in soundtrack.Pistas)
                 {
                     string destino = Path.Combine(soundtrack.Destino, pista);
+                    InformarAplicacion("Instalando soundtrack…", destino);
                     if (File.Exists(destino))
                     {
                         continue;
@@ -330,6 +372,7 @@ internal static class InstaladorDeDlc
 
             if (candidato is not null)
             {
+                InformarAplicacion("Actualizando metadatos del juego…", rutaMetadatos);
                 File.Replace(candidato, rutaMetadatos, respaldoMetadatos);
                 VerificarMetadatos(respaldoMetadatos, actuales);
             }
@@ -392,6 +435,12 @@ internal static class InstaladorDeDlc
                 Directory.CreateDirectory(carpeta);
                 carpetasDeSoundtrack.Add(carpeta);
             }
+        }
+
+        void InformarAplicacion(string mensaje, string ruta)
+        {
+            int porcentaje = FinDeLaDescarga + 9 * realizadas++ / operaciones;
+            progreso?.Report(new ProgresoDeDescarga(mensaje, porcentaje, Path.GetRelativePath(raiz, ruta), Aplicando: true));
         }
     }
 

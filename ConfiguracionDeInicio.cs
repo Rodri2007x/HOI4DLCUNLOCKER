@@ -1,10 +1,10 @@
 namespace DlcDeHoi4;
 
-internal sealed record ConfiguracionDeInicio(string CarpetaDelJuego, Uri? Catalogo)
+internal sealed record ConfiguracionDeInicio(string? CarpetaDelJuego, Uri? Catalogo)
 {
     public static ConfiguracionDeInicio Leer(string[] argumentos)
     {
-        string carpeta = DetectorDeDlc.CarpetaDelJuego;
+        string? carpeta = null;
         string? direccion = null;
         for (int indice = 0; indice < argumentos.Length; indice += 2)
         {

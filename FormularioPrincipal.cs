@@ -17,6 +17,8 @@ public partial class FormularioPrincipal : Form
     private CancellationTokenSource? deteccionEnCurso;
     private CancellationTokenSource? portadasEnCurso;
     private CatalogoDeDlc? catalogo;
+    private string? carpetaDelJuego;
+    private bool buscarCarpeta;
 
     private static bool TemaOscuroDisponible =>
         OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000) && !SystemInformation.HighContrast;
@@ -24,13 +26,14 @@ public partial class FormularioPrincipal : Form
     private bool TemaOscuroActivo => casillaOscuro?.Checked == true && TemaOscuroDisponible;
 
     public FormularioPrincipal()
-        : this(new ConfiguracionDeInicio(DetectorDeDlc.CarpetaDelJuego, null))
+        : this(new ConfiguracionDeInicio(null, null))
     {
     }
 
     internal FormularioPrincipal(ConfiguracionDeInicio configuracion)
     {
         this.configuracion = configuracion;
+        carpetaDelJuego = configuracion.CarpetaDelJuego;
         InitializeComponent();
         Icon = IconoDeLaAplicacion;
         casillaOscuro.Enabled = TemaOscuroDisponible;
@@ -101,6 +104,28 @@ public partial class FormularioPrincipal : Form
 
     private async void ReintentarDeteccion(object? remitente, EventArgs argumentos)
     {
+        if (buscarCarpeta)
+        {
+            using var dialogo = new FolderBrowserDialog
+            {
+                Description = "Selecciona la carpeta de Hearts of Iron IV que contiene hoi4.exe",
+                UseDescriptionForTitle = true,
+                ShowNewFolderButton = false,
+            };
+            if (dialogo.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            if (!LocalizadorDeHoi4.EsCarpetaDelJuego(dialogo.SelectedPath))
+            {
+                MostrarMensajeDeReintento("Selecciona la carpeta que contiene hoi4.exe.", buscarJuego: true);
+                return;
+            }
+
+            carpetaDelJuego = dialogo.SelectedPath;
+        }
+
         await CargarDlcAsync();
     }
 
@@ -122,8 +147,17 @@ public partial class FormularioPrincipal : Form
 
         try
         {
+            string? carpeta = carpetaDelJuego;
+            if (carpeta is null)
+            {
+                carpeta = await EjecutarEtapaAsync("Buscando Hearts of Iron IV en Steam…",
+                    () => LocalizadorDeHoi4.Buscar(cancelacion.Token), cancelacion.Token) ??
+                    throw new DirectoryNotFoundException();
+            }
+
             InstalacionDeHoi4 instalacion = await EjecutarEtapaAsync("Leyendo DLC y metadatos…",
-                () => InstalacionDeHoi4.Leer(configuracion.CarpetaDelJuego, cancelacion.Token), cancelacion.Token);
+                () => InstalacionDeHoi4.Leer(carpeta, cancelacion.Token), cancelacion.Token);
+            carpetaDelJuego = instalacion.Carpeta;
             if (catalogo is null && configuracion.Catalogo is Uri direccion)
             {
                 etiquetaDeEstado.Text = "Cargando catálogo…";
@@ -165,7 +199,7 @@ public partial class FormularioPrincipal : Form
         }
         catch (DirectoryNotFoundException)
         {
-            MostrarMensajeDeReintento("No se encontró la carpeta de Hearts of Iron IV.");
+            MostrarMensajeDeReintento("No se encontró la carpeta de Hearts of Iron IV.", buscarJuego: true);
         }
         catch (Exception excepcion) when (excepcion is IOException or UnauthorizedAccessException)
         {
@@ -301,11 +335,13 @@ public partial class FormularioPrincipal : Form
         return Task.Run(operacion, cancelacion);
     }
 
-    private void MostrarMensajeDeReintento(string mensaje)
+    private void MostrarMensajeDeReintento(string mensaje, bool buscarJuego = false)
     {
         if (!IsDisposed)
         {
             etiquetaDeEstado.Text = mensaje;
+            buscarCarpeta = buscarJuego;
+            botonReintentar.Text = buscarJuego ? "Buscar carpeta" : "Reintentar";
             botonReintentar.Show();
         }
     }
