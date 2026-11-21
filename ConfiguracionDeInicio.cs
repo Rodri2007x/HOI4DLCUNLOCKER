@@ -27,9 +27,9 @@ internal sealed record ConfiguracionDeInicio(string? CarpetaDelJuego, Uri? Catal
         }
 
         string archivo = Path.Combine(AppContext.BaseDirectory, "catalogo.url");
-        if (direccion is null && File.Exists(archivo))
+        if (direccion is null)
         {
-            direccion = File.ReadAllText(archivo).Trim();
+            direccion = File.Exists(archivo) ? File.ReadAllText(archivo).Trim() : "https://51.79.54.34/catalogo.json";
         }
 
         return new ConfiguracionDeInicio(carpeta, direccion is null ? null : CatalogoDeDlc.LeerDireccion(direccion));
