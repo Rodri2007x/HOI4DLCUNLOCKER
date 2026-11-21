@@ -6,10 +6,13 @@ namespace DlcDeHoi4;
 public partial class FormularioPrincipal
 {
     private CancellationTokenSource? descargaEnCurso;
+    private InstalacionDeHoi4? instalacionMostrada;
     private bool cerrarTrasDescarga;
 
     private List<(DlcDetectado Dlc, ListViewItem Fila)> MostrarLista(InstalacionDeHoi4 instalacion)
     {
+        instalacionMostrada = instalacion;
+        casillaSoundtracks.Visible = catalogo?.Dlcs.Any(ficha => ficha.Paquete?.Soundtrack is not null) == true;
         var filas = new List<(DlcDetectado Dlc, ListViewItem Fila)>();
         var idsDeCatalogo = new HashSet<uint>();
         if (catalogo is not null)
@@ -21,13 +24,7 @@ public partial class FormularioPrincipal
                 DlcDetectado? local = detectados[ficha.AppId].FirstOrDefault(dlc => dlc.EstaIntegrado) ??
                     detectados[ficha.AppId].FirstOrDefault();
                 var dlc = new DlcDetectado(ficha.Nombre, ficha.AppId, local?.EstaIntegrado == true, local?.ImagenLocal);
-                string estado = instalacion.EstaInstalado(ficha) ? "✓ Instalado" : "X Falta";
-                if (estado == "X Falta" && ficha.Paquete is PaqueteDeDlc paquete && instalacion.BuildId != paquete.BuildId)
-                {
-                    estado = "X Otra build";
-                }
-
-                filas.Add((dlc, CrearFila(dlc, estado, instalacion.SePuedeInstalar(ficha) ? ficha : null)));
+                filas.Add((dlc, CrearFila(dlc, MostrarEstado(instalacion, ficha), ficha)));
             }
         }
 
@@ -43,13 +40,28 @@ public partial class FormularioPrincipal
         return filas;
     }
 
-    private ListViewItem CrearFila(DlcDetectado dlc, string estado, FichaDeDlc? descargable)
+    private string MostrarEstado(InstalacionDeHoi4 instalacion, FichaDeDlc ficha)
+    {
+        if (instalacion.EstaInstalado(ficha, casillaSoundtracks.Checked))
+        {
+            return "✓ Instalado";
+        }
+
+        if (ficha.Paquete is PaqueteDeDlc paquete && instalacion.BuildId != paquete.BuildId)
+        {
+            return "X Otra build";
+        }
+
+        return casillaSoundtracks.Checked && instalacion.EstaInstalado(ficha) ? "X Falta soundtrack" : "X Falta";
+    }
+
+    private ListViewItem CrearFila(DlcDetectado dlc, string estado, FichaDeDlc? ficha)
     {
         var fila = new ListViewItem(dlc.Nombre)
         {
             Group = dlc.EstaIntegrado ? grupoDeIntegrados : grupoDeInstalados,
             ImageIndex = 0,
-            Tag = descargable,
+            Tag = ficha,
         };
         fila.SubItems.Add(dlc.IdDeSteam?.ToString(CultureInfo.InvariantCulture) ?? "—");
         if (catalogo is not null)
@@ -63,7 +75,8 @@ public partial class FormularioPrincipal
     private void ComprobarSeleccionDeDescarga(object? remitente, ItemCheckEventArgs argumentos)
     {
         if (descargaEnCurso is not null ||
-            argumentos.NewValue == CheckState.Checked && listaDeDlc.Items[argumentos.Index].Tag is not FichaDeDlc)
+            argumentos.NewValue == CheckState.Checked && (listaDeDlc.Items[argumentos.Index].Tag is not FichaDeDlc ficha ||
+                instalacionMostrada?.SePuedeInstalar(ficha, casillaSoundtracks.Checked) != true))
         {
             argumentos.NewValue = argumentos.CurrentValue;
         }
@@ -71,12 +84,35 @@ public partial class FormularioPrincipal
 
     private void CambiarSeleccionDeDescarga(object? remitente, ItemCheckedEventArgs argumentos) => ActualizarBotonDescargar();
 
+    private void CambiarInclusionDeSoundtracks(object? remitente, EventArgs argumentos)
+    {
+        if (instalacionMostrada is not InstalacionDeHoi4 instalacion)
+        {
+            return;
+        }
+
+        foreach (ListViewItem fila in listaDeDlc.Items)
+        {
+            if (fila.Tag is FichaDeDlc ficha)
+            {
+                fila.SubItems[2].Text = MostrarEstado(instalacion, ficha);
+                if (fila.Checked && !instalacion.SePuedeInstalar(ficha, casillaSoundtracks.Checked))
+                {
+                    fila.Checked = false;
+                }
+            }
+        }
+
+        ActualizarBotonDescargar();
+    }
+
     private void ActualizarBotonDescargar()
     {
         if (!IsDisposed)
         {
-            botonDescargar.Enabled = catalogo is not null && descargaEnCurso is null && deteccionEnCurso is null &&
-                listaDeDlc.CheckedItems.Count > 0;
+            bool disponible = catalogo is not null && descargaEnCurso is null && deteccionEnCurso is null;
+            casillaSoundtracks.Enabled = disponible;
+            botonDescargar.Enabled = disponible && listaDeDlc.CheckedItems.Count > 0;
         }
     }
 
@@ -93,6 +129,7 @@ public partial class FormularioPrincipal
             return;
         }
 
+        bool incluirSoundtracks = casillaSoundtracks.Checked;
         using var cancelacion = new CancellationTokenSource();
         descargaEnCurso = cancelacion;
         ActualizarBotonDescargar();
@@ -114,10 +151,10 @@ public partial class FormularioPrincipal
         {
             uint[] ids = fichas.Select(ficha => ficha.AppId).ToArray();
             await Task.Run(() => InstaladorDeDlc.InstalarAsync(configuracion.CarpetaDelJuego, catalogo, ids,
-                progreso, cancelacion.Token), cancelacion.Token);
+                progreso, cancelacion.Token, incluirSoundtracks), cancelacion.Token);
             if (!IsDisposed && !cerrarTrasDescarga && await CargarDlcAsync() is InstalacionDeHoi4 estado)
             {
-                etiquetaDescarga.Text = fichas.All(estado.EstaInstalado)
+                etiquetaDescarga.Text = fichas.All(ficha => estado.EstaInstalado(ficha, incluirSoundtracks))
                     ? "Instalación completada."
                     : "Revisa el estado de los DLC seleccionados.";
             }

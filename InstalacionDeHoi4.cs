@@ -39,7 +39,7 @@ internal sealed partial class InstalacionDeHoi4
         return new InstalacionDeHoi4(raiz.FullName, LeerBuildId(raiz.FullName), metadatos, detectados);
     }
 
-    public bool EstaInstalado(FichaDeDlc ficha)
+    public bool EstaInstalado(FichaDeDlc ficha, bool incluirSoundtracks = false)
     {
         foreach (DlcDetectado dlc in Detectados.Where(dlc => dlc.IdDeSteam == ficha.AppId))
         {
@@ -47,15 +47,23 @@ internal sealed partial class InstalacionDeHoi4
                 string.Equals(dlc.Carpeta, Path.Combine(Carpeta, "dlc", ficha.Paquete.Carpeta), StringComparison.OrdinalIgnoreCase) &&
                 Metadatos?.Contiene(ficha.Paquete.Metadato, ficha.AppId) == true)
             {
-                return true;
+                return !incluirSoundtracks || ficha.Paquete is null || SoundtrackInstalado(ficha.Paquete);
             }
         }
 
         return false;
     }
 
-    public bool SePuedeInstalar(FichaDeDlc ficha) =>
-        ficha.Paquete is not null && BuildId == ficha.Paquete.BuildId && Metadatos is not null && !EstaInstalado(ficha);
+    public bool SePuedeInstalar(FichaDeDlc ficha, bool incluirSoundtracks = false) =>
+        ficha.Paquete is not null && BuildId == ficha.Paquete.BuildId && Metadatos is not null &&
+        !EstaInstalado(ficha, incluirSoundtracks);
+
+    public bool SoundtrackInstalado(PaqueteDeDlc paquete) =>
+        paquete.Soundtrack is null || paquete.Soundtrack.Pistas.All(pista =>
+            File.Exists(Path.Combine(RutaDeSoundtrack(Carpeta, paquete.Carpeta), pista)));
+
+    public static string RutaDeSoundtrack(string carpeta, string carpetaDlc) =>
+        Path.Combine(carpeta, "soundtrack", carpetaDlc);
 
     public static string RutaDeMetadatos(string carpeta) =>
         Path.Combine(carpeta, "dlc_metadata", "dlc_info", NombreDeMetadatos);

@@ -4,7 +4,9 @@ using System.Text.Json;
 namespace DlcDeHoi4;
 
 internal sealed record FichaDeDlc(uint AppId, string Nombre, PaqueteDeDlc? Paquete);
-internal sealed record PaqueteDeDlc(string BuildId, string Carpeta, string Metadato, string Archivo, long Bytes, string Sha256);
+internal sealed record PaqueteDeDlc(string BuildId, string Carpeta, string Metadato, string Archivo, long Bytes, string Sha256,
+    SoundtrackDeDlc? Soundtrack = null);
+internal sealed record SoundtrackDeDlc(string Archivo, long Bytes, string Sha256, string[] Pistas);
 
 internal sealed class CatalogoDeDlc
 {
@@ -75,23 +77,38 @@ internal sealed class CatalogoDeDlc
                 if (paquete.BuildId is not { Length: > 0 } || !paquete.BuildId.All(char.IsAsciiDigit) ||
                     !ComponenteValido(paquete.Carpeta) || !carpetas.Add(paquete.Carpeta) ||
                     !ComponenteValido(paquete.Metadato) || !paquete.Metadato.All(c => char.IsAsciiLetterOrDigit(c) || c == '_') ||
-                    !claves.Add(paquete.Metadato) || paquete.Bytes <= 0 ||
-                    paquete.Sha256 is not { Length: 64 } || !paquete.Sha256.All(Uri.IsHexDigit))
+                    !claves.Add(paquete.Metadato) || !DescargaValida(paquete.Bytes, paquete.Sha256))
                 {
                     throw new InvalidDataException($"Los datos del paquete de {ficha.Nombre} son inválidos o se repiten.");
                 }
 
                 catalogo.DireccionDelPaquete(paquete);
+                if (paquete.Soundtrack is SoundtrackDeDlc soundtrack)
+                {
+                    if (!DescargaValida(soundtrack.Bytes, soundtrack.Sha256) || soundtrack.Pistas is not { Length: > 0 } ||
+                        soundtrack.Pistas.Any(pista => !ComponenteValido(pista) ||
+                            !pista.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase)) ||
+                        soundtrack.Pistas.Distinct(StringComparer.OrdinalIgnoreCase).Count() != soundtrack.Pistas.Length)
+                    {
+                        throw new InvalidDataException($"Los datos del soundtrack de {ficha.Nombre} son inválidos.");
+                    }
+
+                    catalogo.DireccionDelSoundtrack(soundtrack);
+                }
             }
         }
 
         return catalogo;
     }
 
-    public Uri DireccionDelPaquete(PaqueteDeDlc paquete)
+    public Uri DireccionDelPaquete(PaqueteDeDlc paquete) => DireccionDelZip(paquete.Archivo);
+
+    public Uri DireccionDelSoundtrack(SoundtrackDeDlc soundtrack) => DireccionDelZip(soundtrack.Archivo);
+
+    private Uri DireccionDelZip(string archivo)
     {
-        if (paquete.Archivo is { Length: > 0 } && !paquete.Archivo.Contains('\\') &&
-            Uri.TryCreate(paquete.Archivo, UriKind.Relative, out Uri? relativa))
+        if (archivo is { Length: > 0 } && !archivo.Contains('\\') &&
+            Uri.TryCreate(archivo, UriKind.Relative, out Uri? relativa))
         {
             var direccion = new Uri(baseDeArchivos, relativa);
             if (direccion.Scheme == baseDeArchivos.Scheme && direccion.Host == baseDeArchivos.Host &&
@@ -105,6 +122,9 @@ internal sealed class CatalogoDeDlc
 
         throw new InvalidDataException("El ZIP debe tener una ruta relativa dentro de la carpeta del catálogo.");
     }
+
+    private static bool DescargaValida(long bytes, string? sha256) =>
+        bytes > 0 && sha256 is { Length: 64 } && sha256.All(Uri.IsHexDigit);
 
     internal static bool ComponenteValido(string? nombre)
     {

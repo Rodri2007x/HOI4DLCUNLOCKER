@@ -10,6 +10,7 @@ partial class FormularioPrincipal
     private ListViewGroup grupoDeInstalados = null!;
     private ListViewGroup grupoDeIntegrados = null!;
     private TableLayoutPanel barraDeDescarga = null!;
+    private CheckBox casillaSoundtracks = null!;
     private Button botonDescargar = null!;
     private Button botonCancelarDescarga = null!;
     private Label etiquetaDescarga = null!;
@@ -26,6 +27,7 @@ partial class FormularioPrincipal
         grupoDeInstalados = new ListViewGroup("instalados", "DLC instalados");
         grupoDeIntegrados = new ListViewGroup("integrados", "Incluidos en el juego base");
         barraDeDescarga = new TableLayoutPanel();
+        casillaSoundtracks = new CheckBox();
         botonDescargar = new Button();
         botonCancelarDescarga = new Button();
         etiquetaDescarga = new Label();
@@ -87,9 +89,10 @@ partial class FormularioPrincipal
         barraDeDescarga.AutoSize = true;
         barraDeDescarga.Dock = DockStyle.Bottom;
         barraDeDescarga.Padding = new Padding(8);
-        barraDeDescarga.ColumnCount = 3;
+        barraDeDescarga.ColumnCount = 4;
         barraDeDescarga.RowCount = 2;
         barraDeDescarga.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        barraDeDescarga.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         barraDeDescarga.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         barraDeDescarga.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         barraDeDescarga.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -101,24 +104,36 @@ partial class FormularioPrincipal
         etiquetaDescarga.TextAlign = ContentAlignment.MiddleLeft;
         barraDeDescarga.Controls.Add(etiquetaDescarga, 0, 0);
 
+        casillaSoundtracks.AccessibleName = "Incluir soundtracks";
+        casillaSoundtracks.Anchor = AnchorStyles.Left;
+        casillaSoundtracks.AutoSize = true;
+        casillaSoundtracks.Margin = new Padding(8, 3, 8, 3);
+        casillaSoundtracks.TabIndex = 0;
+        casillaSoundtracks.Text = "Incluir &soundtracks";
+        casillaSoundtracks.Visible = false;
+        casillaSoundtracks.CheckedChanged += CambiarInclusionDeSoundtracks;
+        barraDeDescarga.Controls.Add(casillaSoundtracks, 1, 0);
+
         botonCancelarDescarga.Text = "Cancelar";
         botonCancelarDescarga.AutoSize = true;
+        botonCancelarDescarga.TabIndex = 1;
         botonCancelarDescarga.Visible = false;
         botonCancelarDescarga.Click += CancelarDescarga;
-        barraDeDescarga.Controls.Add(botonCancelarDescarga, 1, 0);
+        barraDeDescarga.Controls.Add(botonCancelarDescarga, 2, 0);
 
         botonDescargar.Text = "Descargar";
         botonDescargar.AutoSize = true;
         botonDescargar.Enabled = false;
+        botonDescargar.TabIndex = 2;
         botonDescargar.Click += DescargarSeleccionados;
-        barraDeDescarga.Controls.Add(botonDescargar, 2, 0);
+        barraDeDescarga.Controls.Add(botonDescargar, 3, 0);
 
         progresoDescarga.AccessibleName = "Progreso de descarga";
         progresoDescarga.Dock = DockStyle.Fill;
         progresoDescarga.Height = 12;
         progresoDescarga.Visible = false;
         barraDeDescarga.Controls.Add(progresoDescarga, 0, 1);
-        barraDeDescarga.SetColumnSpan(progresoDescarga, 3);
+        barraDeDescarga.SetColumnSpan(progresoDescarga, 4);
 
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
