@@ -80,13 +80,20 @@ public partial class FormularioPrincipal : Form
 
     private void CambiarTema(object? remitente, EventArgs argumentos)
     {
-        Application.SetColorMode(TemaOscuroActivo ? SystemColorMode.Dark : SystemColorMode.Classic);
-        if (IsDisposed || !IsHandleCreated)
+        if (IsDisposed)
         {
             return;
         }
 
         bool oscuro = TemaOscuroActivo;
+        Application.SetColorMode(oscuro ? SystemColorMode.Dark : SystemColorMode.Classic);
+        botonDescargar.AplicarTema(oscuro);
+        botonReintentar.AplicarTema(oscuro);
+        if (!IsHandleCreated)
+        {
+            return;
+        }
+
         AplicarTemaDeTitulo(oscuro);
         listaDeDlc.AplicarTema(oscuro);
         Invalidate(invalidateChildren: true);

@@ -10,14 +10,14 @@ internal sealed class FormularioDeInstalacion : Form
     private readonly Label detalle = new() { Dock = DockStyle.Fill, AutoEllipsis = true };
     private readonly ProgressBar progreso = new() { Dock = DockStyle.Fill, AccessibleName = "Progreso de instalación" };
     private readonly Label porcentaje = new() { AutoSize = true, Anchor = AnchorStyles.Right, Text = "0 %" };
-    private readonly Button accion = new() { AutoSize = true, Anchor = AnchorStyles.Right, Text = "Cancelar" };
+    private readonly BotonConTema accion = new() { AutoSize = true, Anchor = AnchorStyles.Right, Text = "Cancelar" };
     private bool aplicando;
     private bool finalizada;
 
     public bool InstalacionCompletada { get; private set; }
 
     public FormularioDeInstalacion(CancellationTokenSource cancelacion,
-        Func<IProgress<ProgresoDeDescarga>, CancellationToken, Task> instalar)
+        Func<IProgress<ProgresoDeDescarga>, CancellationToken, Task> instalar, bool temaOscuro)
     {
         this.cancelacion = cancelacion;
         this.instalar = instalar;
@@ -54,6 +54,7 @@ internal sealed class FormularioDeInstalacion : Form
         porcentaje.TextAlign = ContentAlignment.MiddleRight;
         accion.MinimumSize = new Size(88, 0);
         accion.Margin = new Padding(3, 12, 3, 0);
+        accion.AplicarTema(temaOscuro);
         accion.Click += (_, _) => EjecutarAccion();
 
         contenido.Controls.Add(actividad, 0, 0);

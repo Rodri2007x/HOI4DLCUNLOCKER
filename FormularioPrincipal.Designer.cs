@@ -5,14 +5,14 @@ partial class FormularioPrincipal
     private CheckBox casillaOscuro = null!;
     private CheckBox casillaSeleccionarTodos = null!;
     private TableLayoutPanel panelDeEstado = null!;
-    private Button botonReintentar = null!;
+    private BotonConTema botonReintentar = null!;
     private ListaDeDlc listaDeDlc = null!;
     private Label etiquetaDeEstado = null!;
     private ListViewGroup grupoDeInstalados = null!;
     private ListViewGroup grupoDeIntegrados = null!;
     private TableLayoutPanel barraDeDescarga = null!;
     private CheckBox casillaSoundtracks = null!;
-    private Button botonDescargar = null!;
+    private BotonConTema botonDescargar = null!;
     private Label etiquetaDescarga = null!;
 
     private void InitializeComponent()
@@ -21,14 +21,14 @@ partial class FormularioPrincipal
         casillaOscuro = new CheckBox();
         casillaSeleccionarTodos = new CheckBox();
         panelDeEstado = new TableLayoutPanel();
-        botonReintentar = new Button();
+        botonReintentar = new BotonConTema();
         listaDeDlc = new ListaDeDlc();
         etiquetaDeEstado = new Label();
         grupoDeInstalados = new ListViewGroup("instalados", "DLC instalados");
         grupoDeIntegrados = new ListViewGroup("integrados", "Incluidos en el juego base");
         barraDeDescarga = new TableLayoutPanel();
         casillaSoundtracks = new CheckBox();
-        botonDescargar = new Button();
+        botonDescargar = new BotonConTema();
         etiquetaDescarga = new Label();
         SuspendLayout();
         barraDeOpciones.SuspendLayout();

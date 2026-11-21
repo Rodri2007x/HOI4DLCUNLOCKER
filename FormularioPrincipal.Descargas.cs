@@ -190,7 +190,8 @@ public partial class FormularioPrincipal
         try
         {
             using var dialogo = new FormularioDeInstalacion(cancelacion, (progreso, token) =>
-                InstaladorDeDlc.InstalarAsync(instalacion.Carpeta, catalogoActivo, ids, progreso, token, incluirSoundtracks));
+                InstaladorDeDlc.InstalarAsync(instalacion.Carpeta, catalogoActivo, ids, progreso, token, incluirSoundtracks),
+                TemaOscuroActivo);
             dialogo.ShowDialog(this);
             if (dialogo.InstalacionCompletada && !IsDisposed && !cerrarTrasDescarga)
             {
