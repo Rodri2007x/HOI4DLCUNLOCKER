@@ -73,13 +73,15 @@ public partial class FormularioPrincipal
         return fila;
     }
 
-    private bool SePuedeSeleccionar(ListViewItem fila) =>
+    private bool SePuedeInstalarFila(ListViewItem fila) =>
         fila.Tag is FichaDeDlc ficha && instalacionMostrada?.SePuedeInstalar(ficha, casillaSoundtracks.Checked) == true;
+
+    private bool SePuedeDesinstalarFila(ListViewItem fila) =>
+        fila.Tag is FichaDeDlc ficha && instalacionMostrada?.SePuedeDesinstalar(ficha) == true;
 
     private void ComprobarSeleccionDeDescarga(object? remitente, ItemCheckEventArgs argumentos)
     {
-        if (descargaEnCurso is not null ||
-            argumentos.NewValue == CheckState.Checked && !SePuedeSeleccionar(listaDeDlc.Items[argumentos.Index]))
+        if (descargaEnCurso is not null)
         {
             argumentos.NewValue = argumentos.CurrentValue;
         }
@@ -101,7 +103,7 @@ public partial class FormularioPrincipal
         {
             foreach (ListViewItem fila in listaDeDlc.Items)
             {
-                fila.Checked = marcar && SePuedeSeleccionar(fila);
+                fila.Checked = marcar;
             }
         }
         finally
@@ -125,10 +127,6 @@ public partial class FormularioPrincipal
             if (fila.Tag is FichaDeDlc ficha)
             {
                 fila.SubItems[2].Text = MostrarEstado(instalacion, ficha);
-                if (fila.Checked && !SePuedeSeleccionar(fila))
-                {
-                    fila.Checked = false;
-                }
             }
         }
 
@@ -147,19 +145,28 @@ public partial class FormularioPrincipal
         if (!disponible)
         {
             botonDescargar.Enabled = false;
+            botonDesinstalar.Enabled = false;
             casillaSeleccionarTodos.Enabled = false;
             return;
         }
 
-        var seleccionables = listaDeDlc.Items.Cast<ListViewItem>().Where(SePuedeSeleccionar).ToArray();
-        int marcados = seleccionables.Count(fila => fila.Checked);
-        botonDescargar.Enabled = marcados > 0;
-        casillaSeleccionarTodos.Enabled = seleccionables.Length > 0;
+        int total = listaDeDlc.Items.Count;
+        int marcados = listaDeDlc.CheckedItems.Count;
+        var seleccion = listaDeDlc.CheckedItems.Cast<ListViewItem>();
+        botonDescargar.Enabled = seleccion.Any(SePuedeInstalarFila);
+        botonDesinstalar.Enabled = seleccion.Any(SePuedeDesinstalarFila);
+        casillaSeleccionarTodos.Enabled = total > 0;
         casillaSeleccionarTodos.CheckState = marcados == 0 ? CheckState.Unchecked :
-            marcados == seleccionables.Length ? CheckState.Checked : CheckState.Indeterminate;
+            marcados == total ? CheckState.Checked : CheckState.Indeterminate;
     }
 
-    private async void DescargarSeleccionados(object? remitente, EventArgs argumentos)
+    private async void DescargarSeleccionados(object? remitente, EventArgs argumentos) =>
+        await EjecutarSeleccionAsync(desinstalar: false);
+
+    private async void DesinstalarSeleccionados(object? remitente, EventArgs argumentos) =>
+        await EjecutarSeleccionAsync(desinstalar: true);
+
+    private async Task EjecutarSeleccionAsync(bool desinstalar)
     {
         if (catalogo is not CatalogoDeDlc catalogoActivo || instalacionMostrada is not InstalacionDeHoi4 instalacion ||
             descargaEnCurso is not null || deteccionEnCurso is not null)
@@ -167,22 +174,33 @@ public partial class FormularioPrincipal
             return;
         }
 
-        FichaDeDlc[] fichas = listaDeDlc.CheckedItems.Cast<ListViewItem>().Select(fila => fila.Tag).OfType<FichaDeDlc>().ToArray();
+        FichaDeDlc[] fichas = listaDeDlc.CheckedItems.Cast<ListViewItem>()
+            .Where(fila => desinstalar ? SePuedeDesinstalarFila(fila) : SePuedeInstalarFila(fila))
+            .Select(fila => (FichaDeDlc)fila.Tag!)
+            .ToArray();
         if (fichas.Length == 0)
         {
             return;
         }
 
-        string confirmacion = $"¿Confirmas la descarga e instalación de {fichas.Length} DLC en esta carpeta?\n\n" +
-            $"{instalacion.Carpeta}\n\nLa instalación completada es irreversible desde la app.";
-        if (MessageBox.Show(this, confirmacion, "Confirmar descarga e instalación",
+        bool incluirSoundtracks = casillaSoundtracks.Checked;
+        string accion = desinstalar ? "desinstalación" : "descarga e instalación";
+        string aviso = desinstalar
+            ? "Se eliminarán los archivos de los DLC y sus entradas de metadatos. Esta eliminación es irreversible."
+            : "Los archivos que se reemplacen se perderán de forma irreversible.";
+        if (desinstalar && incluirSoundtracks && fichas.Any(ficha => ficha.Paquete?.Soundtrack is not null))
+        {
+            aviso += " También se eliminarán sus soundtracks.";
+        }
+
+        string confirmacion = $"¿Confirmas la {accion} de {fichas.Length} DLC en esta carpeta?\n\n" +
+            $"{instalacion.Carpeta}\n\n{aviso}";
+        if (MessageBox.Show(this, confirmacion, $"Confirmar {accion}",
                 MessageBoxButtons.OKCancel, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.OK)
         {
             return;
         }
 
-        bool incluirSoundtracks = casillaSoundtracks.Checked;
-        uint[] ids = fichas.Select(ficha => ficha.AppId).ToArray();
         using var cancelacion = new CancellationTokenSource();
         descargaEnCurso = cancelacion;
         ActualizarControlesDeDescarga();
@@ -190,10 +208,18 @@ public partial class FormularioPrincipal
         try
         {
             using var dialogo = new FormularioDeInstalacion(cancelacion, (progreso, token) =>
-                InstaladorDeDlc.InstalarAsync(instalacion.Carpeta, catalogoActivo, ids, progreso, token, incluirSoundtracks),
-                TemaOscuroActivo);
+            {
+                if (desinstalar)
+                {
+                    InstaladorDeDlc.Desinstalar(instalacion.Carpeta, fichas, progreso, token, incluirSoundtracks);
+                    return Task.CompletedTask;
+                }
+
+                uint[] ids = fichas.Select(ficha => ficha.AppId).ToArray();
+                return InstaladorDeDlc.InstalarAsync(instalacion.Carpeta, catalogoActivo, ids, progreso, token, incluirSoundtracks);
+            }, TemaOscuroActivo, desinstalar);
             dialogo.ShowDialog(this);
-            if (dialogo.InstalacionCompletada && !IsDisposed && !cerrarTrasDescarga)
+            if (dialogo.OperacionCompletada && !IsDisposed && !cerrarTrasDescarga)
             {
                 await CargarDlcAsync();
             }

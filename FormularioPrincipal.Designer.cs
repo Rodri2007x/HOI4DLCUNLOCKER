@@ -3,7 +3,7 @@ namespace DlcDeHoi4;
 partial class FormularioPrincipal
 {
     private CheckBox casillaOscuro = null!;
-    private CheckBox casillaSeleccionarTodos = null!;
+    private CasillaConTema casillaSeleccionarTodos = null!;
     private TableLayoutPanel panelDeEstado = null!;
     private BotonConTema botonReintentar = null!;
     private ListaDeDlc listaDeDlc = null!;
@@ -13,13 +13,14 @@ partial class FormularioPrincipal
     private TableLayoutPanel barraDeDescarga = null!;
     private CheckBox casillaSoundtracks = null!;
     private BotonConTema botonDescargar = null!;
+    private BotonConTema botonDesinstalar = null!;
     private Label etiquetaDescarga = null!;
 
     private void InitializeComponent()
     {
         var barraDeOpciones = new TableLayoutPanel();
         casillaOscuro = new CheckBox();
-        casillaSeleccionarTodos = new CheckBox();
+        casillaSeleccionarTodos = new CasillaConTema();
         panelDeEstado = new TableLayoutPanel();
         botonReintentar = new BotonConTema();
         listaDeDlc = new ListaDeDlc();
@@ -29,6 +30,7 @@ partial class FormularioPrincipal
         barraDeDescarga = new TableLayoutPanel();
         casillaSoundtracks = new CheckBox();
         botonDescargar = new BotonConTema();
+        botonDesinstalar = new BotonConTema();
         etiquetaDescarga = new Label();
         SuspendLayout();
         barraDeOpciones.SuspendLayout();
@@ -45,7 +47,7 @@ partial class FormularioPrincipal
         barraDeOpciones.Padding = new Padding(10, 6, 10, 6);
         barraDeOpciones.TabIndex = 0;
 
-        casillaSeleccionarTodos.AccessibleName = "Seleccionar todos los DLC disponibles";
+        casillaSeleccionarTodos.AccessibleName = "Seleccionar todos los DLC de la lista";
         casillaSeleccionarTodos.Anchor = AnchorStyles.Left;
         casillaSeleccionarTodos.AutoCheck = false;
         casillaSeleccionarTodos.AutoSize = true;
@@ -110,17 +112,20 @@ partial class FormularioPrincipal
         barraDeDescarga.Padding = new Padding(8);
         barraDeDescarga.TabIndex = 3;
         barraDeDescarga.ColumnCount = 3;
-        barraDeDescarga.RowCount = 1;
+        barraDeDescarga.RowCount = 2;
         barraDeDescarga.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         barraDeDescarga.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         barraDeDescarga.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         barraDeDescarga.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        barraDeDescarga.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         barraDeDescarga.Visible = false;
 
         etiquetaDescarga.AutoEllipsis = true;
+        etiquetaDescarga.AutoSize = true;
         etiquetaDescarga.Dock = DockStyle.Fill;
         etiquetaDescarga.TextAlign = ContentAlignment.MiddleLeft;
         barraDeDescarga.Controls.Add(etiquetaDescarga, 0, 0);
+        barraDeDescarga.SetColumnSpan(etiquetaDescarga, 3);
 
         casillaSoundtracks.AccessibleName = "Incluir soundtracks";
         casillaSoundtracks.Anchor = AnchorStyles.Left;
@@ -130,14 +135,21 @@ partial class FormularioPrincipal
         casillaSoundtracks.Text = "Incluir &soundtracks";
         casillaSoundtracks.Visible = false;
         casillaSoundtracks.CheckedChanged += CambiarInclusionDeSoundtracks;
-        barraDeDescarga.Controls.Add(casillaSoundtracks, 1, 0);
+        barraDeDescarga.Controls.Add(casillaSoundtracks, 0, 1);
+
+        botonDesinstalar.Text = "Desinstalar seleccionados";
+        botonDesinstalar.AutoSize = true;
+        botonDesinstalar.Enabled = false;
+        botonDesinstalar.TabIndex = 1;
+        botonDesinstalar.Click += DesinstalarSeleccionados;
+        barraDeDescarga.Controls.Add(botonDesinstalar, 1, 1);
 
         botonDescargar.Text = "Descargar e instalar";
         botonDescargar.AutoSize = true;
         botonDescargar.Enabled = false;
-        botonDescargar.TabIndex = 1;
+        botonDescargar.TabIndex = 2;
         botonDescargar.Click += DescargarSeleccionados;
-        barraDeDescarga.Controls.Add(botonDescargar, 2, 0);
+        barraDeDescarga.Controls.Add(botonDescargar, 2, 1);
 
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;

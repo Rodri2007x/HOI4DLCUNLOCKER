@@ -6,6 +6,7 @@ internal sealed class FormularioDeInstalacion : Form
 {
     private readonly CancellationTokenSource cancelacion;
     private readonly Func<IProgress<ProgresoDeDescarga>, CancellationToken, Task> instalar;
+    private readonly bool desinstalar;
     private readonly Label actividad = new() { AutoSize = true, Text = "Preparando la instalación…" };
     private readonly Label detalle = new() { Dock = DockStyle.Fill, AutoEllipsis = true };
     private readonly ProgressBar progreso = new() { Dock = DockStyle.Fill, AccessibleName = "Progreso de instalación" };
@@ -14,15 +15,18 @@ internal sealed class FormularioDeInstalacion : Form
     private bool aplicando;
     private bool finalizada;
 
-    public bool InstalacionCompletada { get; private set; }
+    public bool OperacionCompletada { get; private set; }
 
     public FormularioDeInstalacion(CancellationTokenSource cancelacion,
-        Func<IProgress<ProgresoDeDescarga>, CancellationToken, Task> instalar, bool temaOscuro)
+        Func<IProgress<ProgresoDeDescarga>, CancellationToken, Task> instalar, bool temaOscuro, bool desinstalar)
     {
         this.cancelacion = cancelacion;
         this.instalar = instalar;
+        this.desinstalar = desinstalar;
 
-        Text = "Descarga e instalación de DLC";
+        Text = desinstalar ? "Desinstalación de DLC" : "Descarga e instalación de DLC";
+        actividad.Text = desinstalar ? "Preparando la desinstalación…" : "Preparando la instalación…";
+        progreso.AccessibleName = desinstalar ? "Progreso de desinstalación" : "Progreso de instalación";
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         AutoScaleDimensions = new SizeF(7F, 15F);
@@ -74,17 +78,17 @@ internal sealed class FormularioDeInstalacion : Form
         try
         {
             await Task.Run(() => instalar(avance, cancelacion.Token), cancelacion.Token);
-            InstalacionCompletada = true;
-            Finalizar("Instalación completada.");
+            OperacionCompletada = true;
+            Finalizar(desinstalar ? "Desinstalación completada." : "Instalación completada.");
         }
         catch (OperationCanceledException)
         {
-            Finalizar(cancelacion.IsCancellationRequested ? "Instalación cancelada." : "La descarga tardó demasiado.");
+            Finalizar(cancelacion.IsCancellationRequested ? "Operación cancelada." : "La operación tardó demasiado.");
         }
         catch (Exception error) when (error is HttpRequestException or IOException or InvalidDataException or
             UnauthorizedAccessException or DecoderFallbackException or OverflowException)
         {
-            Finalizar("No se pudo completar la instalación.", error.Message);
+            Finalizar(desinstalar ? "No se pudo completar la desinstalación." : "No se pudo completar la instalación.", error.Message);
         }
     }
 
@@ -122,7 +126,7 @@ internal sealed class FormularioDeInstalacion : Form
         finalizada = true;
         actividad.Text = mensaje;
         detalle.Text = explicacion ?? string.Empty;
-        if (InstalacionCompletada)
+        if (OperacionCompletada)
         {
             MostrarPorcentaje(100);
         }
@@ -142,7 +146,7 @@ internal sealed class FormularioDeInstalacion : Form
         else if (!aplicando && !cancelacion.IsCancellationRequested)
         {
             accion.Enabled = false;
-            actividad.Text = "Cancelando la instalación…";
+            actividad.Text = "Cancelando la operación…";
             detalle.Text = string.Empty;
             cancelacion.Cancel();
         }

@@ -8,7 +8,7 @@ namespace DlcDeHoi4;
 
 internal sealed record ProgresoDeDescarga(string Mensaje, int Porcentaje, string? Archivo = null, bool Aplicando = false);
 
-internal static class InstaladorDeDlc
+internal static partial class InstaladorDeDlc
 {
     private const int FinDeLaDescarga = 90;
 
@@ -22,8 +22,7 @@ internal static class InstaladorDeDlc
         string rutaMetadatos = InstalacionDeHoi4.RutaDeMetadatos(raiz);
         ValidarRutasDeJuego(raiz);
 
-        using var bloqueo = new FileStream(Path.Combine(raiz, ".dlcdehoi4-instalar.lock"), FileMode.CreateNew,
-            FileAccess.Write, FileShare.None, bufferSize: 1, FileOptions.DeleteOnClose);
+        using var bloqueo = BloquearInstalacion(raiz);
         InstalacionDeHoi4 instalacion = InstalacionDeHoi4.Leer(raiz, cancelacion);
         if (instalacion.Metadatos is null)
         {
@@ -142,17 +141,37 @@ internal static class InstaladorDeDlc
         }
         finally
         {
-            if (!conservarRespaldo)
+            LimpiarTemporal(raiz, temporal, conservarRespaldo);
+        }
+    }
+
+    private static FileStream BloquearInstalacion(string raiz) =>
+        new(Path.Combine(raiz, ".dlcdehoi4-instalar.lock"), FileMode.CreateNew,
+            FileAccess.Write, FileShare.None, bufferSize: 1, FileOptions.DeleteOnClose);
+
+    private static void LimpiarTemporal(string raiz, string temporal, bool conservarRespaldo)
+    {
+        if (conservarRespaldo)
+        {
+            return;
+        }
+
+        try
+        {
+            string ruta = Path.GetFullPath(temporal);
+            const string prefijo = ".dlcdehoi4-";
+            string nombre = Path.GetFileName(ruta);
+            if (string.Equals(Path.GetDirectoryName(ruta), Path.TrimEndingDirectorySeparator(Path.GetFullPath(raiz)),
+                StringComparison.OrdinalIgnoreCase) && nombre.StartsWith(prefijo, StringComparison.Ordinal) &&
+                Guid.TryParseExact(nombre.AsSpan(prefijo.Length), "N", out _))
             {
-                try
-                {
-                    Directory.Delete(temporal, recursive: true);
-                }
-                catch (Exception error) when (error is IOException or UnauthorizedAccessException)
-                {
-                    // El contenido temporal puede limpiarse después aunque otro proceso lo tenga abierto.
-                }
+                ValidarRuta(ruta);
+                Directory.Delete(ruta, recursive: true);
             }
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            // El contenido temporal puede limpiarse después aunque otro proceso lo tenga abierto.
         }
     }
 
@@ -323,11 +342,12 @@ internal static class InstaladorDeDlc
 
     private static void Aplicar(string raiz, IReadOnlyList<DlcPreparado> preparados, IReadOnlyList<SoundtrackPreparado> soundtracks,
         string rutaMetadatos, string? candidato, string temporal, MetadatosDeDlc actuales, IProgress<ProgresoDeDescarga>? progreso,
-        ref bool conservarRespaldo)
+        ref bool conservarRespaldo, bool desinstalando = false)
     {
         string respaldoMetadatos = Path.Combine(temporal, "respaldo-metadatos.txt");
         var movimientos = new List<Movimiento>();
         var pistasInstaladas = new List<string>();
+        var pistasRetiradas = new List<(string Destino, string Respaldo)>();
         var carpetasDeSoundtrack = new List<string>();
         int operaciones = preparados.Count + soundtracks.Sum(soundtrack => soundtrack.Pistas.Length) + (candidato is null ? 0 : 1);
         int realizadas = 0;
@@ -336,7 +356,7 @@ internal static class InstaladorDeDlc
             VerificarMetadatos(rutaMetadatos, actuales);
             foreach (DlcPreparado preparado in preparados)
             {
-                InformarAplicacion("Instalando DLC…", preparado.Destino);
+                InformarAplicacion(desinstalando ? "Retirando DLC…" : "Instalando DLC…", preparado.Destino);
                 ValidarDestino(raiz, preparado.Destino, preparado.Entrada.AppId, CancellationToken.None);
                 Directory.CreateDirectory(Path.GetDirectoryName(preparado.Destino)!);
                 var movimiento = new Movimiento(preparado, Path.Combine(temporal, $"respaldo-{movimientos.Count}"));
@@ -347,18 +367,37 @@ internal static class InstaladorDeDlc
                     movimiento.HayRespaldo = true;
                 }
 
-                Directory.Move(preparado.Carpeta, preparado.Destino);
-                movimiento.CarpetaInstalada = true;
+                if (preparado.Carpeta is string origen)
+                {
+                    Directory.Move(origen, preparado.Destino);
+                    movimiento.CarpetaInstalada = true;
+                }
             }
 
             foreach (SoundtrackPreparado soundtrack in soundtracks)
             {
                 ValidarDestinoSoundtrack(soundtrack.Destino, soundtrack.Pistas);
-                CrearCarpetaDeSoundtrack(Path.GetDirectoryName(soundtrack.Destino)!);
-                CrearCarpetaDeSoundtrack(soundtrack.Destino);
+                if (soundtrack.Carpeta is not null)
+                {
+                    CrearCarpetaDeSoundtrack(Path.GetDirectoryName(soundtrack.Destino)!);
+                    CrearCarpetaDeSoundtrack(soundtrack.Destino);
+                }
+
                 foreach (string pista in soundtrack.Pistas)
                 {
                     string destino = Path.Combine(soundtrack.Destino, pista);
+                    if (soundtrack.Carpeta is null)
+                    {
+                        InformarAplicacion("Retirando soundtrack…", destino);
+                        if (File.Exists(destino))
+                        {
+                            string respaldo = Path.Combine(temporal, $"pista-{pistasRetiradas.Count}");
+                            File.Move(destino, respaldo);
+                            pistasRetiradas.Add((destino, respaldo));
+                        }
+                        continue;
+                    }
+
                     InformarAplicacion("Instalando soundtrack…", destino);
                     if (File.Exists(destino))
                     {
@@ -395,6 +434,11 @@ internal static class InstaladorDeDlc
                     File.Delete(pista);
                 }
 
+                foreach (var (destino, respaldo) in pistasRetiradas)
+                {
+                    File.Move(respaldo, destino);
+                }
+
                 for (int indice = carpetasDeSoundtrack.Count - 1; indice >= 0; indice--)
                 {
                     string carpeta = carpetasDeSoundtrack[indice];
@@ -407,9 +451,9 @@ internal static class InstaladorDeDlc
                 for (int indice = movimientos.Count - 1; indice >= 0; indice--)
                 {
                     Movimiento movimiento = movimientos[indice];
-                    if (movimiento.CarpetaInstalada)
+                    if (movimiento.CarpetaInstalada && movimiento.Dlc.Carpeta is string origen)
                     {
-                        Directory.Move(movimiento.Dlc.Destino, movimiento.Dlc.Carpeta);
+                        Directory.Move(movimiento.Dlc.Destino, origen);
                     }
 
                     if (movimiento.HayRespaldo)
@@ -439,7 +483,8 @@ internal static class InstaladorDeDlc
 
         void InformarAplicacion(string mensaje, string ruta)
         {
-            int porcentaje = FinDeLaDescarga + 9 * realizadas++ / operaciones;
+            int inicio = desinstalando ? 0 : FinDeLaDescarga;
+            int porcentaje = inicio + (99 - inicio) * realizadas++ / operaciones;
             progreso?.Report(new ProgresoDeDescarga(mensaje, porcentaje, Path.GetRelativePath(raiz, ruta), Aplicando: true));
         }
     }
@@ -517,8 +562,8 @@ internal static class InstaladorDeDlc
         }
     }
 
-    private sealed record DlcPreparado(string Carpeta, string Destino, EntradaDeMetadatos Entrada);
-    private sealed record SoundtrackPreparado(string Carpeta, string Destino, string[] Pistas);
+    private sealed record DlcPreparado(string? Carpeta, string Destino, EntradaDeMetadatos Entrada);
+    private sealed record SoundtrackPreparado(string? Carpeta, string Destino, string[] Pistas);
 
     private sealed class Movimiento(DlcPreparado dlc, string respaldo)
     {

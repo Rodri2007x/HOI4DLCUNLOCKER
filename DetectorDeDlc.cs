@@ -43,9 +43,9 @@ internal static partial class DetectorDeDlc
     public static DlcDetectado[] LeerMetadatos(ArchivosDeDlc archivos, CancellationToken cancelacion)
     {
         IEnumerable<DlcDetectado> instalados = LeerDescriptores(archivos.Instalados, estaIntegrado: false, cancelacion);
-        return instalados
+        return LeerDescriptores(archivos.Integrados, estaIntegrado: true, cancelacion)
+            .Concat(instalados)
             .Concat(archivos.Extras)
-            .Concat(LeerDescriptores(archivos.Integrados, estaIntegrado: true, cancelacion))
             .DistinctBy(dlc => (dlc.IdDeSteam, dlc.Nombre))
             .OrderBy(dlc => dlc.Nombre, StringComparer.CurrentCultureIgnoreCase)
             .ToArray();

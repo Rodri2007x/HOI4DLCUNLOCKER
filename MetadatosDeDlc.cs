@@ -103,6 +103,17 @@ internal sealed class MetadatosDeDlc
         Contiene(clave, appId) ? entradas[clave] :
             throw new InvalidDataException($"El metadata del ZIP debe contener {clave} con el App ID {appId}.");
 
+    public string Retirar(IEnumerable<EntradaDeMetadatos> seleccion)
+    {
+        var texto = new StringBuilder(Texto);
+        foreach (EntradaDeMetadatos entrada in seleccion.OrderByDescending(entrada => entrada.Inicio))
+        {
+            texto.Remove(entrada.Inicio, entrada.Bloque.Length);
+        }
+
+        return texto.ToString();
+    }
+
     public string Incorporar(IEnumerable<EntradaDeMetadatos> aprobadas)
     {
         string salto = Texto.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";

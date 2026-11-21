@@ -61,6 +61,12 @@ internal sealed partial class InstalacionDeHoi4
         ficha.Paquete is not null && BuildId == ficha.Paquete.BuildId && Metadatos is not null &&
         !EstaInstalado(ficha, incluirSoundtracks);
 
+    public bool SePuedeDesinstalar(FichaDeDlc ficha) =>
+        ficha.Paquete is PaqueteDeDlc paquete && Metadatos?.Contiene(paquete.Metadato, ficha.AppId) == true &&
+        !Detectados.Any(dlc => dlc.IdDeSteam == ficha.AppId && dlc.EstaIntegrado) &&
+        Detectados.Any(dlc => dlc.IdDeSteam == ficha.AppId &&
+            string.Equals(dlc.Carpeta, Path.Combine(Carpeta, "dlc", paquete.Carpeta), StringComparison.OrdinalIgnoreCase));
+
     public bool SoundtrackInstalado(PaqueteDeDlc paquete) =>
         paquete.Soundtrack is null || paquete.Soundtrack.Pistas.All(pista =>
             File.Exists(Path.Combine(RutaDeSoundtrack(Carpeta, paquete.Carpeta), pista)));

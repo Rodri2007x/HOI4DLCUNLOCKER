@@ -87,7 +87,9 @@ public partial class FormularioPrincipal : Form
 
         bool oscuro = TemaOscuroActivo;
         Application.SetColorMode(oscuro ? SystemColorMode.Dark : SystemColorMode.Classic);
+        casillaSeleccionarTodos.AplicarTema(oscuro);
         botonDescargar.AplicarTema(oscuro);
+        botonDesinstalar.AplicarTema(oscuro);
         botonReintentar.AplicarTema(oscuro);
         if (!IsHandleCreated)
         {
