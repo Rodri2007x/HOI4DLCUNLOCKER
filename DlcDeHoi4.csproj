@@ -11,6 +11,10 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Recursos\PaqueteYLupa.ico" />
+    <None Remove="Recursos\CreamAPI\steam_api.dll" />
+    <None Remove="Recursos\CreamAPI\steam_api64.dll" />
+    <EmbeddedResource Include="Recursos\CreamAPI\steam_api.dll" />
+    <EmbeddedResource Include="Recursos\CreamAPI\steam_api64.dll" />
   </ItemGroup>
 
 </Project>

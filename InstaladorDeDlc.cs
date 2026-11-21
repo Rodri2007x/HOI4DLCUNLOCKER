@@ -21,6 +21,7 @@ internal static partial class InstaladorDeDlc
         string destinoDlc = Path.Combine(raiz, "dlc");
         string rutaMetadatos = InstalacionDeHoi4.RutaDeMetadatos(raiz);
         ValidarRutasDeJuego(raiz);
+        ParcheDeCreamApi.Validar(raiz);
 
         using var bloqueo = BloquearInstalacion(raiz);
         InstalacionDeHoi4 instalacion = InstalacionDeHoi4.Leer(raiz, cancelacion);
@@ -135,8 +136,14 @@ internal static partial class InstaladorDeDlc
             }
             cancelacion.ThrowIfCancellationRequested();
 
+            var idsNuevos = seleccion.Where(entrada => entrada.InstalarDlc).Select(entrada => entrada.Ficha.AppId).ToHashSet();
+            FichaDeDlc[] desbloqueables = catalogo.Dlcs.Where(ficha => ficha.Paquete is not null &&
+                (idsNuevos.Contains(ficha.AppId) || instalacionActual.Detectados.Any(dlc =>
+                    !dlc.EstaIntegrado && dlc.IdDeSteam == ficha.AppId))).ToArray();
+            ParcheDeCreamApi parche = ParcheDeCreamApi.Preparar(raiz, temporal, desbloqueables);
             progreso?.Report(new ProgresoDeDescarga("Instalando el contenido seleccionado…", FinDeLaDescarga, Aplicando: true));
-            Aplicar(raiz, preparados, soundtracksPreparados, rutaMetadatos, candidato, temporal, actuales, progreso, ref conservarRespaldo);
+            Aplicar(raiz, preparados, soundtracksPreparados, rutaMetadatos, candidato, temporal, actuales, progreso,
+                ref conservarRespaldo, parche);
             progreso?.Report(new ProgresoDeDescarga("Finalizando la instalación…", 99, Aplicando: true));
         }
         finally
@@ -342,14 +349,15 @@ internal static partial class InstaladorDeDlc
 
     private static void Aplicar(string raiz, IReadOnlyList<DlcPreparado> preparados, IReadOnlyList<SoundtrackPreparado> soundtracks,
         string rutaMetadatos, string? candidato, string temporal, MetadatosDeDlc actuales, IProgress<ProgresoDeDescarga>? progreso,
-        ref bool conservarRespaldo, bool desinstalando = false)
+        ref bool conservarRespaldo, ParcheDeCreamApi? parche = null, bool desinstalando = false)
     {
         string respaldoMetadatos = Path.Combine(temporal, "respaldo-metadatos.txt");
         var movimientos = new List<Movimiento>();
         var pistasInstaladas = new List<string>();
         var pistasRetiradas = new List<(string Destino, string Respaldo)>();
         var carpetasDeSoundtrack = new List<string>();
-        int operaciones = preparados.Count + soundtracks.Sum(soundtrack => soundtrack.Pistas.Length) + (candidato is null ? 0 : 1);
+        int operaciones = preparados.Count + soundtracks.Sum(soundtrack => soundtrack.Pistas.Length) +
+            (candidato is null ? 0 : 1) + (parche?.Operaciones ?? 0);
         int realizadas = 0;
         try
         {
@@ -409,6 +417,7 @@ internal static partial class InstaladorDeDlc
                 }
             }
 
+            parche?.Aplicar(ruta => InformarAplicacion("Instalando CreamAPI…", ruta));
             if (candidato is not null)
             {
                 InformarAplicacion("Actualizando metadatos del juego…", rutaMetadatos);
@@ -424,6 +433,7 @@ internal static partial class InstaladorDeDlc
         {
             try
             {
+                parche?.Deshacer();
                 if (File.Exists(respaldoMetadatos))
                 {
                     File.Move(respaldoMetadatos, rutaMetadatos, overwrite: true);
@@ -548,7 +558,7 @@ internal static partial class InstaladorDeDlc
         }
     }
 
-    private static void ValidarRuta(string ruta)
+    internal static void ValidarRuta(string ruta)
     {
         try
         {

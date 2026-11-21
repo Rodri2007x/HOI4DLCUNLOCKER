@@ -187,7 +187,7 @@ public partial class FormularioPrincipal
         string accion = desinstalar ? "desinstalación" : "descarga e instalación";
         string aviso = desinstalar
             ? "Se eliminarán los archivos de los DLC y sus entradas de metadatos. Esta eliminación es irreversible."
-            : "Los archivos que se reemplacen se perderán de forma irreversible.";
+            : "También se instalará el parche de CreamAPI. Los archivos que se reemplacen se perderán de forma irreversible.";
         if (desinstalar && incluirSoundtracks && fichas.Any(ficha => ficha.Paquete?.Soundtrack is not null))
         {
             aviso += " También se eliminarán sus soundtracks.";
