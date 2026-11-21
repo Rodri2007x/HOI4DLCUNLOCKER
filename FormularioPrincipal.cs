@@ -113,6 +113,7 @@ public partial class FormularioPrincipal : Form
 
         using var cancelacion = new CancellationTokenSource();
         deteccionEnCurso = cancelacion;
+        ActualizarControlesDeDescarga();
         portadasEnCurso?.Cancel();
         botonReintentar.Hide();
         listaDeDlc.Hide();
@@ -148,11 +149,14 @@ public partial class FormularioPrincipal : Form
             listaDeDlc.Show();
             if (catalogo is not null)
             {
+                string? version = instalacion.VersionDelJuego is string versionDelJuego
+                    ? $"{versionDelJuego} (Steam)"
+                    : instalacion.BuildId;
                 etiquetaDescarga.Text = instalacion.BuildId is null
                     ? "No se pudo identificar la build de Steam."
                     : instalacion.Metadatos is null
                         ? "Revisa 00_dlc_info.txt antes de descargar."
-                        : $"Build de HOI4 {instalacion.BuildId}";
+                        : $"Build de HOI4 {version}";
                 barraDeDescarga.Show();
             }
 
@@ -177,7 +181,7 @@ public partial class FormularioPrincipal : Form
         finally
         {
             deteccionEnCurso = null;
-            ActualizarBotonDescargar();
+            ActualizarControlesDeDescarga();
         }
 
         return null;

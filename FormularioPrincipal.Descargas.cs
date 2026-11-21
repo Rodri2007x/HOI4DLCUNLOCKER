@@ -7,11 +7,13 @@ public partial class FormularioPrincipal
 {
     private CancellationTokenSource? descargaEnCurso;
     private InstalacionDeHoi4? instalacionMostrada;
+    private bool actualizandoSeleccion;
     private bool cerrarTrasDescarga;
 
     private List<(DlcDetectado Dlc, ListViewItem Fila)> MostrarLista(InstalacionDeHoi4 instalacion)
     {
         instalacionMostrada = instalacion;
+        casillaSeleccionarTodos.Visible = catalogo is not null;
         casillaSoundtracks.Visible = catalogo?.Dlcs.Any(ficha => ficha.Paquete?.Soundtrack is not null) == true;
         var filas = new List<(DlcDetectado Dlc, ListViewItem Fila)>();
         var idsDeCatalogo = new HashSet<uint>();
@@ -72,17 +74,45 @@ public partial class FormularioPrincipal
         return fila;
     }
 
+    private bool SePuedeSeleccionar(ListViewItem fila) =>
+        fila.Tag is FichaDeDlc ficha && instalacionMostrada?.SePuedeInstalar(ficha, casillaSoundtracks.Checked) == true;
+
     private void ComprobarSeleccionDeDescarga(object? remitente, ItemCheckEventArgs argumentos)
     {
         if (descargaEnCurso is not null ||
-            argumentos.NewValue == CheckState.Checked && (listaDeDlc.Items[argumentos.Index].Tag is not FichaDeDlc ficha ||
-                instalacionMostrada?.SePuedeInstalar(ficha, casillaSoundtracks.Checked) != true))
+            argumentos.NewValue == CheckState.Checked && !SePuedeSeleccionar(listaDeDlc.Items[argumentos.Index]))
         {
             argumentos.NewValue = argumentos.CurrentValue;
         }
     }
 
-    private void CambiarSeleccionDeDescarga(object? remitente, ItemCheckedEventArgs argumentos) => ActualizarBotonDescargar();
+    private void CambiarSeleccionDeDescarga(object? remitente, ItemCheckedEventArgs argumentos) => ActualizarControlesDeDescarga();
+
+    private void CambiarSeleccionDeTodos(object? remitente, EventArgs argumentos)
+    {
+        if (!casillaSeleccionarTodos.Enabled)
+        {
+            return;
+        }
+
+        bool marcar = casillaSeleccionarTodos.CheckState != CheckState.Checked;
+        actualizandoSeleccion = true;
+        listaDeDlc.BeginUpdate();
+        try
+        {
+            foreach (ListViewItem fila in listaDeDlc.Items)
+            {
+                fila.Checked = marcar && SePuedeSeleccionar(fila);
+            }
+        }
+        finally
+        {
+            listaDeDlc.EndUpdate();
+            actualizandoSeleccion = false;
+        }
+
+        ActualizarControlesDeDescarga();
+    }
 
     private void CambiarInclusionDeSoundtracks(object? remitente, EventArgs argumentos)
     {
@@ -96,24 +126,38 @@ public partial class FormularioPrincipal
             if (fila.Tag is FichaDeDlc ficha)
             {
                 fila.SubItems[2].Text = MostrarEstado(instalacion, ficha);
-                if (fila.Checked && !instalacion.SePuedeInstalar(ficha, casillaSoundtracks.Checked))
+                if (fila.Checked && !SePuedeSeleccionar(fila))
                 {
                     fila.Checked = false;
                 }
             }
         }
 
-        ActualizarBotonDescargar();
+        ActualizarControlesDeDescarga();
     }
 
-    private void ActualizarBotonDescargar()
+    private void ActualizarControlesDeDescarga()
     {
-        if (!IsDisposed)
+        if (IsDisposed || actualizandoSeleccion)
         {
-            bool disponible = catalogo is not null && descargaEnCurso is null && deteccionEnCurso is null;
-            casillaSoundtracks.Enabled = disponible;
-            botonDescargar.Enabled = disponible && listaDeDlc.CheckedItems.Count > 0;
+            return;
         }
+
+        bool disponible = catalogo is not null && descargaEnCurso is null && deteccionEnCurso is null;
+        casillaSoundtracks.Enabled = disponible;
+        if (!disponible)
+        {
+            botonDescargar.Enabled = false;
+            casillaSeleccionarTodos.Enabled = false;
+            return;
+        }
+
+        var seleccionables = listaDeDlc.Items.Cast<ListViewItem>().Where(SePuedeSeleccionar).ToArray();
+        int marcados = seleccionables.Count(fila => fila.Checked);
+        botonDescargar.Enabled = marcados > 0;
+        casillaSeleccionarTodos.Enabled = seleccionables.Length > 0;
+        casillaSeleccionarTodos.CheckState = marcados == 0 ? CheckState.Unchecked :
+            marcados == seleccionables.Length ? CheckState.Checked : CheckState.Indeterminate;
     }
 
     private async void DescargarSeleccionados(object? remitente, EventArgs argumentos)
@@ -132,7 +176,7 @@ public partial class FormularioPrincipal
         bool incluirSoundtracks = casillaSoundtracks.Checked;
         using var cancelacion = new CancellationTokenSource();
         descargaEnCurso = cancelacion;
-        ActualizarBotonDescargar();
+        ActualizarControlesDeDescarga();
         botonCancelarDescarga.Show();
         progresoDescarga.Value = 0;
         progresoDescarga.Show();
@@ -182,7 +226,7 @@ public partial class FormularioPrincipal
             {
                 botonCancelarDescarga.Hide();
                 progresoDescarga.Hide();
-                ActualizarBotonDescargar();
+                ActualizarControlesDeDescarga();
                 if (cerrarTrasDescarga)
                 {
                     Close();

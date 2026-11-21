@@ -3,6 +3,7 @@ namespace DlcDeHoi4;
 partial class FormularioPrincipal
 {
     private CheckBox casillaOscuro = null!;
+    private CheckBox casillaSeleccionarTodos = null!;
     private TableLayoutPanel panelDeEstado = null!;
     private Button botonReintentar = null!;
     private ListaDeDlc listaDeDlc = null!;
@@ -18,8 +19,9 @@ partial class FormularioPrincipal
 
     private void InitializeComponent()
     {
-        var barraDeOpciones = new FlowLayoutPanel();
+        var barraDeOpciones = new TableLayoutPanel();
         casillaOscuro = new CheckBox();
+        casillaSeleccionarTodos = new CheckBox();
         panelDeEstado = new TableLayoutPanel();
         botonReintentar = new Button();
         listaDeDlc = new ListaDeDlc();
@@ -38,16 +40,35 @@ partial class FormularioPrincipal
 
         barraDeOpciones.AutoSize = true;
         barraDeOpciones.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        barraDeOpciones.ColumnCount = 2;
+        barraDeOpciones.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        barraDeOpciones.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        barraDeOpciones.RowCount = 1;
+        barraDeOpciones.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         barraDeOpciones.Dock = DockStyle.Top;
-        barraDeOpciones.FlowDirection = FlowDirection.RightToLeft;
         barraDeOpciones.Padding = new Padding(10, 6, 10, 6);
-        barraDeOpciones.WrapContents = false;
+        barraDeOpciones.TabIndex = 0;
 
+        casillaSeleccionarTodos.AccessibleName = "Seleccionar todos los DLC disponibles";
+        casillaSeleccionarTodos.Anchor = AnchorStyles.Left;
+        casillaSeleccionarTodos.AutoCheck = false;
+        casillaSeleccionarTodos.AutoSize = true;
+        casillaSeleccionarTodos.Enabled = false;
+        casillaSeleccionarTodos.Margin = Padding.Empty;
+        casillaSeleccionarTodos.TabIndex = 0;
+        casillaSeleccionarTodos.Text = "Seleccionar &todos";
+        casillaSeleccionarTodos.ThreeState = true;
+        casillaSeleccionarTodos.Visible = false;
+        casillaSeleccionarTodos.Click += CambiarSeleccionDeTodos;
+        barraDeOpciones.Controls.Add(casillaSeleccionarTodos, 0, 0);
+
+        casillaOscuro.Anchor = AnchorStyles.Right;
         casillaOscuro.AutoSize = true;
         casillaOscuro.Margin = Padding.Empty;
+        casillaOscuro.TabIndex = 1;
         casillaOscuro.Text = "Oscuro";
         casillaOscuro.CheckedChanged += CambiarTema;
-        barraDeOpciones.Controls.Add(casillaOscuro);
+        barraDeOpciones.Controls.Add(casillaOscuro, 1, 0);
 
         panelDeEstado.ColumnCount = 1;
         panelDeEstado.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
@@ -58,6 +79,7 @@ partial class FormularioPrincipal
         panelDeEstado.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
         panelDeEstado.Dock = DockStyle.Fill;
         panelDeEstado.Padding = new Padding(16);
+        panelDeEstado.TabIndex = 2;
 
         etiquetaDeEstado.AutoSize = true;
         etiquetaDeEstado.Anchor = AnchorStyles.None;
@@ -79,6 +101,7 @@ partial class FormularioPrincipal
         listaDeDlc.View = View.Details;
         listaDeDlc.FullRowSelect = true;
         listaDeDlc.HideSelection = false;
+        listaDeDlc.TabIndex = 1;
         listaDeDlc.Visible = false;
         listaDeDlc.Columns.Add("DLC", 400);
         listaDeDlc.Columns.Add("ID de Steam", 95);
@@ -89,6 +112,7 @@ partial class FormularioPrincipal
         barraDeDescarga.AutoSize = true;
         barraDeDescarga.Dock = DockStyle.Bottom;
         barraDeDescarga.Padding = new Padding(8);
+        barraDeDescarga.TabIndex = 3;
         barraDeDescarga.ColumnCount = 4;
         barraDeDescarga.RowCount = 2;
         barraDeDescarga.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
