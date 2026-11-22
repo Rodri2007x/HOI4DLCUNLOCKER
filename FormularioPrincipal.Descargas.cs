@@ -14,6 +14,7 @@ public partial class FormularioPrincipal
         instalacionMostrada = instalacion;
         casillaSeleccionarTodos.Visible = catalogo is not null;
         casillaSoundtracks.Visible = catalogo?.Dlcs.Any(ficha => ficha.Paquete?.Soundtrack is not null) == true;
+        casillaRepararLauncher.Visible = catalogo is not null;
         var filas = new List<(DlcDetectado Dlc, ListViewItem Fila)>();
         var idsDeCatalogo = new HashSet<uint>();
         if (catalogo is not null)
@@ -142,6 +143,7 @@ public partial class FormularioPrincipal
 
         bool disponible = catalogo is not null && descargaEnCurso is null && deteccionEnCurso is null;
         casillaSoundtracks.Enabled = disponible;
+        casillaRepararLauncher.Enabled = disponible;
         if (!disponible)
         {
             botonDescargar.Enabled = false;
@@ -184,6 +186,7 @@ public partial class FormularioPrincipal
         }
 
         bool incluirSoundtracks = casillaSoundtracks.Checked;
+        bool repararLauncher = !desinstalar && casillaRepararLauncher.Checked;
         string accion = desinstalar ? "desinstalación" : "descarga e instalación";
         string aviso = desinstalar
             ? "Se eliminarán los archivos de los DLC y sus entradas de metadatos. Esta eliminación es irreversible."
@@ -191,6 +194,11 @@ public partial class FormularioPrincipal
         if (desinstalar && incluirSoundtracks && fichas.Any(ficha => ficha.Paquete?.Soundtrack is not null))
         {
             aviso += " También se eliminarán sus soundtracks.";
+        }
+
+        if (repararLauncher)
+        {
+            aviso += " Con el launcher cerrado, se respaldará y regenerará su base de datos.";
         }
 
         string confirmacion = $"¿Confirmas la {accion} de {fichas.Length} DLC en esta carpeta?\n\n" +
@@ -216,7 +224,8 @@ public partial class FormularioPrincipal
                 }
 
                 uint[] ids = fichas.Select(ficha => ficha.AppId).ToArray();
-                return InstaladorDeDlc.InstalarAsync(instalacion.Carpeta, catalogoActivo, ids, progreso, token, incluirSoundtracks);
+                return InstaladorDeDlc.InstalarAsync(instalacion.Carpeta, catalogoActivo, ids, progreso, token, incluirSoundtracks,
+                    repararLauncher);
             }, TemaOscuroActivo, desinstalar);
             dialogo.ShowDialog(this);
             if (dialogo.OperacionCompletada && !IsDisposed && !cerrarTrasDescarga)

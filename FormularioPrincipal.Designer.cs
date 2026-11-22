@@ -12,6 +12,7 @@ partial class FormularioPrincipal
     private ListViewGroup grupoDeIntegrados = null!;
     private TableLayoutPanel barraDeDescarga = null!;
     private CheckBox casillaSoundtracks = null!;
+    private CheckBox casillaRepararLauncher = null!;
     private BotonConTema botonDescargar = null!;
     private BotonConTema botonDesinstalar = null!;
     private Label etiquetaDescarga = null!;
@@ -29,6 +30,7 @@ partial class FormularioPrincipal
         grupoDeIntegrados = new ListViewGroup("integrados", "Incluidos en el juego base");
         barraDeDescarga = new TableLayoutPanel();
         casillaSoundtracks = new CheckBox();
+        casillaRepararLauncher = new CheckBox();
         botonDescargar = new BotonConTema();
         botonDesinstalar = new BotonConTema();
         etiquetaDescarga = new Label();
@@ -112,10 +114,11 @@ partial class FormularioPrincipal
         barraDeDescarga.Padding = new Padding(8);
         barraDeDescarga.TabIndex = 3;
         barraDeDescarga.ColumnCount = 3;
-        barraDeDescarga.RowCount = 2;
+        barraDeDescarga.RowCount = 3;
         barraDeDescarga.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         barraDeDescarga.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         barraDeDescarga.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        barraDeDescarga.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         barraDeDescarga.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         barraDeDescarga.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         barraDeDescarga.Visible = false;
@@ -137,19 +140,29 @@ partial class FormularioPrincipal
         casillaSoundtracks.CheckedChanged += CambiarInclusionDeSoundtracks;
         barraDeDescarga.Controls.Add(casillaSoundtracks, 0, 1);
 
+        casillaRepararLauncher.AccessibleName = "Reparar la base de datos del launcher";
+        casillaRepararLauncher.Anchor = AnchorStyles.Left;
+        casillaRepararLauncher.AutoSize = true;
+        casillaRepararLauncher.Margin = new Padding(8, 3, 8, 3);
+        casillaRepararLauncher.TabIndex = 1;
+        casillaRepararLauncher.Text = "Reparar &launcher";
+        casillaRepararLauncher.Visible = false;
+        barraDeDescarga.Controls.Add(casillaRepararLauncher, 1, 1);
+        barraDeDescarga.SetColumnSpan(casillaRepararLauncher, 2);
+
         botonDesinstalar.Text = "Desinstalar seleccionados";
         botonDesinstalar.AutoSize = true;
         botonDesinstalar.Enabled = false;
-        botonDesinstalar.TabIndex = 1;
+        botonDesinstalar.TabIndex = 2;
         botonDesinstalar.Click += DesinstalarSeleccionados;
-        barraDeDescarga.Controls.Add(botonDesinstalar, 1, 1);
+        barraDeDescarga.Controls.Add(botonDesinstalar, 1, 2);
 
         botonDescargar.Text = "Descargar e instalar";
         botonDescargar.AutoSize = true;
         botonDescargar.Enabled = false;
-        botonDescargar.TabIndex = 2;
+        botonDescargar.TabIndex = 3;
         botonDescargar.Click += DescargarSeleccionados;
-        barraDeDescarga.Controls.Add(botonDescargar, 2, 1);
+        barraDeDescarga.Controls.Add(botonDescargar, 2, 2);
 
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;

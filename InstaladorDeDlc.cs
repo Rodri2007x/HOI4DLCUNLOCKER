@@ -13,7 +13,8 @@ internal static partial class InstaladorDeDlc
     private const int FinDeLaDescarga = 90;
 
     public static async Task InstalarAsync(string carpeta, CatalogoDeDlc catalogo, uint[] ids,
-        IProgress<ProgresoDeDescarga>? progreso, CancellationToken cancelacion, bool incluirSoundtracks = false)
+        IProgress<ProgresoDeDescarga>? progreso, CancellationToken cancelacion, bool incluirSoundtracks = false,
+        bool repararLauncher = false)
     {
         cancelacion.ThrowIfCancellationRequested();
         progreso?.Report(new ProgresoDeDescarga("Comprobando la instalación de HOI4…", 0));
@@ -22,6 +23,7 @@ internal static partial class InstaladorDeDlc
         string rutaMetadatos = InstalacionDeHoi4.RutaDeMetadatos(raiz);
         ValidarRutasDeJuego(raiz);
         ParcheDeCreamApi.Validar(raiz);
+        ReparacionDeLauncher? reparacion = repararLauncher ? ReparacionDeLauncher.Preparar() : null;
 
         using var bloqueo = BloquearInstalacion(raiz);
         InstalacionDeHoi4 instalacion = InstalacionDeHoi4.Leer(raiz, cancelacion);
@@ -143,7 +145,7 @@ internal static partial class InstaladorDeDlc
             ParcheDeCreamApi parche = ParcheDeCreamApi.Preparar(raiz, temporal, desbloqueables);
             progreso?.Report(new ProgresoDeDescarga("Instalando el contenido seleccionado…", FinDeLaDescarga, Aplicando: true));
             Aplicar(raiz, preparados, soundtracksPreparados, rutaMetadatos, candidato, temporal, actuales, progreso,
-                ref conservarRespaldo, parche);
+                ref conservarRespaldo, parche, reparacion);
             progreso?.Report(new ProgresoDeDescarga("Finalizando la instalación…", 99, Aplicando: true));
         }
         finally
@@ -349,7 +351,8 @@ internal static partial class InstaladorDeDlc
 
     private static void Aplicar(string raiz, IReadOnlyList<DlcPreparado> preparados, IReadOnlyList<SoundtrackPreparado> soundtracks,
         string rutaMetadatos, string? candidato, string temporal, MetadatosDeDlc actuales, IProgress<ProgresoDeDescarga>? progreso,
-        ref bool conservarRespaldo, ParcheDeCreamApi? parche = null, bool desinstalando = false)
+        ref bool conservarRespaldo, ParcheDeCreamApi? parche = null, ReparacionDeLauncher? reparacion = null,
+        bool desinstalando = false)
     {
         string respaldoMetadatos = Path.Combine(temporal, "respaldo-metadatos.txt");
         var movimientos = new List<Movimiento>();
@@ -357,7 +360,7 @@ internal static partial class InstaladorDeDlc
         var pistasRetiradas = new List<(string Destino, string Respaldo)>();
         var carpetasDeSoundtrack = new List<string>();
         int operaciones = preparados.Count + soundtracks.Sum(soundtrack => soundtrack.Pistas.Length) +
-            (candidato is null ? 0 : 1) + (parche?.Operaciones ?? 0);
+            (candidato is null ? 0 : 1) + (parche?.Operaciones ?? 0) + (reparacion is null ? 0 : 1);
         int realizadas = 0;
         try
         {
@@ -428,11 +431,14 @@ internal static partial class InstaladorDeDlc
             {
                 VerificarMetadatos(rutaMetadatos, actuales);
             }
+
+            reparacion?.Aplicar(ruta => InformarAplicacion("Restableciendo la base de datos del launcher…", ruta));
         }
         catch (Exception fallo) when (fallo is IOException or UnauthorizedAccessException or InvalidDataException or DecoderFallbackException)
         {
             try
             {
+                reparacion?.Deshacer();
                 parche?.Deshacer();
                 if (File.Exists(respaldoMetadatos))
                 {
