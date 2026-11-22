@@ -116,11 +116,13 @@ internal sealed class MetadatosDeDlc
 
     public string Incorporar(IEnumerable<EntradaDeMetadatos> aprobadas)
     {
+        var seleccion = aprobadas.ToList();
+        bool incluyeSovietTanks = seleccion.Any(entrada => entrada.Clave == "dlc006" && entrada.AppId == 460554);
         string salto = Texto.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
         var texto = new StringBuilder(Texto);
         var nuevas = new List<string>();
         var reemplazos = new List<(EntradaDeMetadatos Anterior, string Nuevo)>();
-        foreach (EntradaDeMetadatos aprobada in aprobadas)
+        foreach (EntradaDeMetadatos aprobada in seleccion)
         {
             string bloque = aprobada.Bloque.ReplaceLineEndings(salto);
             if (entradas.TryGetValue(aprobada.Clave, out EntradaDeMetadatos? local))
@@ -140,9 +142,19 @@ internal sealed class MetadatosDeDlc
             }
             else
             {
-                if (entradas.Values.Any(entrada => entrada.AppId == aprobada.AppId))
+                if (entradas.Values.FirstOrDefault(entrada => entrada.AppId == aprobada.AppId) is EntradaDeMetadatos duplicado)
                 {
-                    throw new InvalidDataException($"El App ID {aprobada.AppId} ya figura con otra clave.");
+                    bool duplicadoSovietDefectuoso = duplicado.Clave == "dlc006" && aprobada.Clave == "dlc005" &&
+                        aprobada.AppId == 460553;
+                    if (!duplicadoSovietDefectuoso || entradas.Values.Any(entrada => entrada.AppId == 460554))
+                    {
+                        throw new InvalidDataException($"El App ID {aprobada.AppId} ya figura con otra clave.");
+                    }
+
+                    if (!incluyeSovietTanks)
+                    {
+                        reemplazos.Add((duplicado, string.Empty));
+                    }
                 }
 
                 nuevas.Add(bloque);
