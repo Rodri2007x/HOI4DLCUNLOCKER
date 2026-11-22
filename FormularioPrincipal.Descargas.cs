@@ -198,7 +198,7 @@ public partial class FormularioPrincipal
 
         if (repararLauncher)
         {
-            aviso += " Con el launcher cerrado, se respaldará y regenerará su base de datos.";
+            aviso += " ADVERTENCIA: se eliminarán los playsets del launcher. Con el launcher cerrado, se respaldará y regenerará su base de datos.";
         }
 
         string confirmacion = $"¿Confirmas la {accion} de {fichas.Length} DLC en esta carpeta?\n\n" +
