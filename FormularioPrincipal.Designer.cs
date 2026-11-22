@@ -140,12 +140,12 @@ partial class FormularioPrincipal
         casillaSoundtracks.CheckedChanged += CambiarInclusionDeSoundtracks;
         barraDeDescarga.Controls.Add(casillaSoundtracks, 0, 1);
 
-        casillaRepararLauncher.AccessibleName = "Reparar la base de datos del launcher";
+        casillaRepararLauncher.AccessibleName = "Reparar la base de datos del launcher eliminando los playsets";
         casillaRepararLauncher.Anchor = AnchorStyles.Left;
         casillaRepararLauncher.AutoSize = true;
         casillaRepararLauncher.Margin = new Padding(8, 3, 8, 3);
         casillaRepararLauncher.TabIndex = 1;
-        casillaRepararLauncher.Text = "Reparar &launcher";
+        casillaRepararLauncher.Text = "Reparar &launcher (borra playsets)";
         casillaRepararLauncher.Visible = false;
         barraDeDescarga.Controls.Add(casillaRepararLauncher, 1, 1);
         barraDeDescarga.SetColumnSpan(casillaRepararLauncher, 2);
